@@ -14,9 +14,8 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
-import org.spongepowered.asm.mixin.injection.callback.LocalCapture;
 
-@Mixin(targets = "net.minecraft.world.entity.animal.Dolphin$DolphinSwimToTreasureGoal")
+@Mixin(targets = "net.minecraft.world.entity.animal.Dolphin$DolphinSwimToTreasureGoal", priority = 800)
 public class DolphinSwimToTreasureGoalMixin {
 	private LocateTask<BlockPos> locateTask = null;
 	private BlockPos asyncFoundPos = null;
@@ -63,7 +62,6 @@ public class DolphinSwimToTreasureGoalMixin {
 	@Inject(method = "tick", at = @At(value = "HEAD"), cancellable = true)
 	public void skipTickingIfLocatingTreasure(CallbackInfo ci) {
 		if (locateTask != null && asyncFoundPos == null) {
-			ALConstants.logDebug("Locating task ongoing - skipping tick()");
 			ci.cancel();
 		}
 	}
@@ -72,11 +70,9 @@ public class DolphinSwimToTreasureGoalMixin {
 	@Redirect(method = "tick", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/entity/animal/Dolphin;getTreasurePos()Lnet/minecraft/core/BlockPos;"))
 	public BlockPos redirectGetTreasurePos(Dolphin dolphin) {
 		if (asyncFoundPos != null) {
-			ALConstants.logDebug("Returning async found treasure position: {}", asyncFoundPos);
 			return asyncFoundPos;
 		}
-		BlockPos vanillaPos = dolphin.getTreasurePos();
-		return vanillaPos;
+		return dolphin.getTreasurePos();
 	}
 
 	private void handleFindTreasureAsync(ServerLevel level, BlockPos blockPos) {

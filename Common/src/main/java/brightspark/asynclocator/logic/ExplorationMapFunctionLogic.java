@@ -23,7 +23,7 @@ import java.util.UUID;
 public class ExplorationMapFunctionLogic {
 	// I'd like to think that structure locating shouldn't take *this* long
     private static final Cache<UUID, Component> MAP_NAME_CACHE =
-        CacheBuilder.newBuilder().expireAfterWrite(Duration.ofMinutes(5)).build();
+        CacheBuilder.newBuilder().expireAfterWrite(Duration.ofMinutes(5)).maximumSize(3_000).build();
 
 	private ExplorationMapFunctionLogic() {}
 

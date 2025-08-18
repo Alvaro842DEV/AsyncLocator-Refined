@@ -23,9 +23,20 @@ public class EnderEyeItemLogic {
 			false
 		).thenOnServerThread(pos -> {
 			((EyeOfEnderData) eyeOfEnder).setLocateTaskOngoing(false);
+
+			// Entity may have been removed/unloaded while we were locating
+			if (!eyeOfEnder.isAlive() || eyeOfEnder.isRemoved()) {
+				ALConstants.logDebug("EyeOfEnder no longer alive when locate result arrived; skipping update.");
+				return;
+			}
+
 			if (pos != null) {
 				ALConstants.logInfo("Location found - updating eye of ender entity");
-				eyeOfEnder.signalTo(pos);
+				try {
+					eyeOfEnder.signalTo(pos);
+				} catch (Throwable t) {
+					ALConstants.logError(t, "Failed to signal EyeOfEnder to position {}", pos);
+				}
 				if (player instanceof ServerPlayer sp) {
 					CriteriaTriggers.USED_ENDER_EYE.trigger(sp, pos);
 				}
