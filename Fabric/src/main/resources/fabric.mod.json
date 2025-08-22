@@ -8,7 +8,8 @@
 	"contributors": ["alvaro842 (maintainer)"],
 	"contact": {
 		"homepage": "https://modrinth.com/mod/async-locator-refined",
-		"sources": "https://github.com/Alvaro842DEV/AsyncLocator-Refined"
+		"sources": "https://github.com/Alvaro842DEV/AsyncLocator-Refined",
+		"issues": "https://github.com/Alvaro842DEV/AsyncLocator-Refined/issues"
 	},
 	"license": "MIT License",
 	"icon": "logo.png",
@@ -20,7 +21,7 @@
 	"depends": {
 		"fabricloader": ">=0.17.0",
 		"fabric-api": ">=0.116.2+1.21.1",
-		"minecraft": ">=1.21.1",
+		"minecraft": "1.21.1",
 		"java": ">=21"
 	}
 }
