@@ -13,6 +13,9 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.TagKey;
+import net.minecraft.world.entity.npc.AbstractVillager;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.npc.Villager;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.MapItem;
 import net.minecraft.world.level.Level;
@@ -35,6 +38,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 @Mixin(ExplorationMapFunction.class)
 public abstract class ExplorationMapFunctionMixin {
@@ -74,6 +78,25 @@ public abstract class ExplorationMapFunctionMixin {
 		if (this.asyncLocator$decorationTypeKey == null) return Optional.empty();
 		return context.getLevel().registryAccess().registry(Registries.MAP_DECORATION_TYPE)
 				.flatMap(registry -> registry.getHolder(this.asyncLocator$decorationTypeKey));
+	}
+
+	@Unique
+	private static void asyncLocator$refreshMerchantUIIfApplicable(LootContext context) {
+		var entity = context.getParamOrNull(LootContextParams.THIS_ENTITY);
+		if (entity instanceof AbstractVillager merchant) {
+			if (merchant.getTradingPlayer() instanceof ServerPlayer tradingPlayer) {
+				int villagerLevel = merchant instanceof Villager villager ? villager.getVillagerData().getLevel() : 1;
+				tradingPlayer.sendMerchantOffers(
+					tradingPlayer.containerMenu.containerId,
+					merchant.getOffers(),
+					villagerLevel,
+					merchant.getVillagerXp(),
+					merchant.showProgressBar(),
+					merchant.canRestock()
+				);
+				ALConstants.logDebug("Refreshed merchant offers for trade UI");
+			}
+		}
 	}
 
 	@Redirect(
@@ -129,6 +152,33 @@ public abstract class ExplorationMapFunctionMixin {
 						? BlockPos.containing(context.getParam(LootContextParams.ORIGIN))
 						: null;
 
+		// First, try to update merchant offer result directly
+		boolean merchantUpdated = false;
+			var thisEntity = context.getParamOrNull(LootContextParams.THIS_ENTITY);
+			if (thisEntity instanceof AbstractVillager merchant) {
+				UUID targetId = CommonLogic.getTrackingUUID(pendingMapStack);
+				if (targetId != null) {
+					for (var offer : merchant.getOffers()) {
+						var result = offer.getResult();
+						UUID offerId = CommonLogic.getTrackingUUID(result);
+						if (targetId.equals(offerId)) {
+							if (foundPos != null) {
+								ALConstants.logDebug("Finalizing map in merchant offer (UUID: {})", offerId);
+								CommonLogic.finalizeMap(result, serverLevel, foundPos, this.zoom, mapDecorationHolderOpt.get(), mapName);
+							} else {
+								ALConstants.logDebug("Clearing pending map in merchant offer (UUID: {})", offerId);
+								CommonLogic.clearPendingState(result);
+							}
+							merchantUpdated = true;
+							break;
+						}
+					}
+				} else {
+					ALConstants.logWarn("Managed map lacks tracking UUID in trade context: cannot match offer result");
+				}
+			}
+
+			if (!merchantUpdated) {
 				if (foundPos != null) {
 					ALConstants.logInfo("Async location found for exploration map {}: {}", destination.location(), foundPos);
 					if (inventoryPos != null) {
@@ -138,7 +188,7 @@ public abstract class ExplorationMapFunctionMixin {
 							mapDecorationHolderOpt.get(), inventoryPos, mapName
 						);
 					} else {
-						// if it can't find the inventory, finalize in place
+						// if it can't find the container, finalize the map
 						CommonLogic.finalizeMap(pendingMapStack, serverLevel, foundPos, this.zoom, mapDecorationHolderOpt.get(), mapName);
 					}
 				} else {
@@ -150,6 +200,8 @@ public abstract class ExplorationMapFunctionMixin {
                         CommonLogic.clearPendingState(pendingMapStack);
                     }
 				}
+			}
+				asyncLocator$refreshMerchantUIIfApplicable(context);
 			});
 
 		return pendingMapStack;

@@ -28,7 +28,7 @@ public class NeoForgeExplorationMapFunctionLogicHelper
 		ServerLevel level,
 		BlockPos invPos
 	) {
-		handleUpdateMapInChest(mapStack, level, invPos, (handler, slot) -> {
+		boolean updated = handleUpdateMapInChest(mapStack, level, invPos, (handler, slot) -> {
 			ALConstants.logDebug(
 				"Invalidating map in Forge inventory slot {}",
 				slot
@@ -49,6 +49,10 @@ public class NeoForgeExplorationMapFunctionLogicHelper
 				}
 			}
 		});
+		if (!updated) {
+			ALConstants.logDebug("NeoForge invalidateMap fallback: no container/slot match. Clearing pending state in-place.");
+			CommonLogic.clearPendingState(mapStack);
+		}
 	}
 
 	@Override
@@ -70,7 +74,7 @@ public class NeoForgeExplorationMapFunctionLogicHelper
 			displayName
 		);
 
-		handleUpdateMapInChest(mapStack, level, invPos, (handler, slot) -> {
+		boolean updated = handleUpdateMapInChest(mapStack, level, invPos, (handler, slot) -> {
 			ItemStack actualStack = handler.getStackInSlot(slot);
 
 			CommonLogic.finalizeMap(actualStack, level, pos, scale, destinationTypeHolder, displayName);
@@ -84,9 +88,12 @@ public class NeoForgeExplorationMapFunctionLogicHelper
 				handler.insertItem(slot, actualStack, false);
 			}
 		});
+		if (!updated) {
+			ALConstants.logDebug("NeoForge updateMap fallback: no container/slot match. Pending map already finalized in-place.");
+		}
 	}
 
-	private static void handleUpdateMapInChest(
+	private static boolean handleUpdateMapInChest(
 		ItemStack mapStackToFind,
 		ServerLevel level,
 		BlockPos inventoryPos,
@@ -119,12 +126,14 @@ public class NeoForgeExplorationMapFunctionLogicHelper
 						inventoryPos
 					);
 				}
+				return found;
 			} else {
 				ALConstants.logWarn(
 					"Couldn't find item handler capability on block entity {} at {}",
 					be.getClass().getSimpleName(),
 					inventoryPos
 				);
+				return false;
 			}
 		} else {
 			ALConstants.logWarn(
@@ -132,6 +141,7 @@ public class NeoForgeExplorationMapFunctionLogicHelper
 				inventoryPos,
 				level.dimension().location()
 			);
+			return false;
 		}
 	}
 }

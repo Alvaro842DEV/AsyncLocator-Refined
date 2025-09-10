@@ -20,10 +20,14 @@ import java.util.function.BiConsumer;
 public class FabricExplorationMapFunctionLogicHelper implements ExplorationMapFunctionLogicHelper {
 	@Override
 	public void invalidateMap(ItemStack mapStack, ServerLevel level, BlockPos invPos) {
-		handleUpdateMapInContainer(mapStack, level, invPos, (container, slot) -> {
+		boolean updated = handleUpdateMapInContainer(mapStack, level, invPos, (container, slot) -> {
 			ALConstants.logDebug("Invalidating map in Fabric container slot {}", slot);
 			container.setItem(slot, new ItemStack(Items.MAP));
 		});
+		if (!updated) {
+			ALConstants.logDebug("Fabric invalidateMap fallback: no container/slot match. Clearing pending state in-place.");
+			CommonLogic.clearPendingState(mapStack);
+		}
 	}
 
 	@Override
@@ -36,7 +40,7 @@ public class FabricExplorationMapFunctionLogicHelper implements ExplorationMapFu
 		BlockPos invPos,
 		@Nullable Component displayName
 	) {
-		handleUpdateMapInContainer(mapStack, level, invPos, (container, slot) -> {
+		boolean updated = handleUpdateMapInContainer(mapStack, level, invPos, (container, slot) -> {
 		ItemStack actualStack = container.getItem(slot);
 
 		CommonLogic.finalizeMap(actualStack, level, pos, scale, destinationTypeHolder, displayName);
@@ -45,10 +49,14 @@ public class FabricExplorationMapFunctionLogicHelper implements ExplorationMapFu
 
 		CommonLogic.clearPendingState(actualStack);
 		});
+		if (!updated) {
+			ALConstants.logDebug("Fabric updateMap fallback: no container/slot match. Finalizing pending map in-place.");
+			CommonLogic.finalizeMap(mapStack, level, pos, scale, destinationTypeHolder, displayName);
+		}
 	}
 
 	// Now works with any container
-	private static void handleUpdateMapInContainer(
+	private static boolean handleUpdateMapInContainer(
 		ItemStack mapStackToFind,
 		ServerLevel level,
 		BlockPos inventoryPos,
@@ -75,11 +83,13 @@ public class FabricExplorationMapFunctionLogicHelper implements ExplorationMapFu
 			if (!found) {
 				ALConstants.logWarn("Could not find map with UUID {} in container {} at {}", targetId, be.getClass().getSimpleName(), inventoryPos);
 			}
+			return found;
 		} else {
 			ALConstants.logWarn(
 				"No Container at inventory position {} in level {}",
 				inventoryPos, level.dimension().location()
 			);
+			return false;
 		}
 	}
 }

@@ -133,9 +133,11 @@ public class CommonLogic {
 		
 		if (displayName != null) {
 			mapStack.set(DataComponents.ITEM_NAME, displayName);
-		} else {
-			mapStack.remove(DataComponents.ITEM_NAME);
 		}
+		/** 
+		 * If no displayName was provided, we keep whatever name the map already has
+		 * so we don't wipe titles set by other mods or loot
+		 */
 		
 	clearPendingState(mapStack);
 	}
