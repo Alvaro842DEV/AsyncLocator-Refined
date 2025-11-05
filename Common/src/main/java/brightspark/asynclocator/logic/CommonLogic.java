@@ -1,5 +1,6 @@
 package brightspark.asynclocator.logic;
 
+import brightspark.asynclocator.ALConstants;
 import brightspark.asynclocator.ALDataComponents;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
@@ -46,6 +47,7 @@ public class CommonLogic {
 		CompoundTag customData = new CompoundTag();
 		customData.putString(UUID_TRACKER, UUID.randomUUID().toString());
 		stack.set(DataComponents.CUSTOM_DATA, CustomData.of(customData));
+		stack.set(ALDataComponents.LOCATING, Unit.INSTANCE);
 		return stack;
 	}
 
