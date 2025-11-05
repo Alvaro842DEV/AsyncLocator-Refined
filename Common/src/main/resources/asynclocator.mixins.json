@@ -1,10 +1,12 @@
 {
   "required": true,
   "package": "brightspark.asynclocator.mixins",
-  "compatibilityLevel": "JAVA_17",
+  "compatibilityLevel": "JAVA_21",
   "refmap": "asynclocator.refmap.json",
   "mixins": [
+    "DolphinAccessor",
     "DolphinSwimToTreasureGoalMixin",
+    "DolphinSwimToTreasureGoalStuckAccessor",
     "EnderEyeItemMixin",
     "ExplorationMapFunctionMixin",
     "EyeOfEnderMixin",
