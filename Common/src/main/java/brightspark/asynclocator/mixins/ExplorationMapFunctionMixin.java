@@ -18,7 +18,6 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.npc.Villager;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.MapItem;
-import net.minecraft.world.level.Level;
 import net.minecraft.world.level.levelgen.structure.Structure;
 import net.minecraft.world.level.saveddata.maps.MapDecorationType;
 import net.minecraft.world.level.saveddata.maps.MapId;
@@ -87,7 +86,7 @@ public abstract class ExplorationMapFunctionMixin {
 			: null;
 		if (entity instanceof AbstractVillager merchant) {
 			if (merchant.getTradingPlayer() instanceof ServerPlayer tradingPlayer) {
-				int villagerLevel = merchant instanceof Villager villager ? villager.getVillagerData().getLevel() : 1;
+				int villagerLevel = merchant instanceof Villager villager ? villager.getVillagerData().level() : 1;
 				tradingPlayer.sendMerchantOffers(
 					tradingPlayer.containerMenu.containerId,
 					merchant.getOffers(),
@@ -105,34 +104,34 @@ public abstract class ExplorationMapFunctionMixin {
 		method = "run(Lnet/minecraft/world/item/ItemStack;Lnet/minecraft/world/level/storage/loot/LootContext;)Lnet/minecraft/world/item/ItemStack;",
 		at = @At(
 			value = "INVOKE",
-			target = "Lnet/minecraft/world/item/MapItem;create(Lnet/minecraft/world/level/Level;IIBZZ)Lnet/minecraft/world/item/ItemStack;"
+			target = "Lnet/minecraft/world/item/MapItem;create(Lnet/minecraft/server/level/ServerLevel;IIBZZ)Lnet/minecraft/world/item/ItemStack;"
 		)
 	)
 	private ItemStack redirectMapItemCreate(
-		Level level, int x, int z, byte scale, boolean trackingPosition, boolean unlimitedTracking,
+		ServerLevel serverLevel, int x, int z, byte scale, boolean trackingPosition, boolean unlimitedTracking,
 		ItemStack originalStack_usedByRun, LootContext context_usedByRun
 	) {
 		LootContext context = context_usedByRun;
 
-		if (!Services.CONFIG.explorationMapEnabled() || !(level instanceof ServerLevel serverLevel)) {
-			return MapItem.create(level, x, z, scale, trackingPosition, unlimitedTracking);
+		if (!Services.CONFIG.explorationMapEnabled()) {
+			return MapItem.create(serverLevel, x, z, scale, trackingPosition, unlimitedTracking);
 		}
 
 		Optional<Holder<MapDecorationType>> mapDecorationHolderOpt = getDecorationHolderFromKey(context);
 		if (mapDecorationHolderOpt.isEmpty()) {
 			ALConstants.logError("ExplorationMap Redirect: Couldn't get MapDecorationType Holder for key {}, falling back to vanilla map creation.", this.asyncLocator$decorationTypeKey);
-			return MapItem.create(level, x, z, scale, trackingPosition, unlimitedTracking);
+			return MapItem.create(serverLevel, x, z, scale, trackingPosition, unlimitedTracking);
 		}
 
 		ALConstants.logDebug("Redirecting MapItem.create for async locator exploration map {}.", destination.location());
 
 		BlockPos originPos = context.hasParameter(LootContextParams.ORIGIN)
 			? BlockPos.containing(context.getParameter(LootContextParams.ORIGIN))
-			: BlockPos.containing(x, level.getHeight() / 2, z);
+			: BlockPos.containing(x, serverLevel.getHeight() / 2, z);
 
 		MapItemSavedData mapData = MapItemSavedData.createFresh(
-			0,
-			0,
+			x,
+			z,
 			this.zoom,
 			false,
 			false,

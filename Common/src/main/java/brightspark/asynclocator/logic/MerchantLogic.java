@@ -5,12 +5,6 @@ import brightspark.asynclocator.AsyncLocator;
 import brightspark.asynclocator.mixins.MerchantOfferAccess;
 import brightspark.asynclocator.platform.Services;
 import brightspark.asynclocator.ALDataComponents;
-import net.minecraft.util.Unit;
-import net.minecraft.world.level.saveddata.maps.MapId;
-import net.minecraft.world.level.saveddata.maps.MapItemSavedData;
-import net.minecraft.world.level.Level;
-import net.minecraft.resources.ResourceKey;
-import com.mojang.datafixers.util.Pair;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
 import net.minecraft.core.HolderSet;
@@ -22,7 +16,6 @@ import net.minecraft.tags.TagKey;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.npc.AbstractVillager;
 import net.minecraft.world.entity.npc.Villager;
-import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.trading.ItemCost;
@@ -82,7 +75,7 @@ public class MerchantLogic {
 		if (merchant.getTradingPlayer() instanceof ServerPlayer tradingPlayer) {
 			ALConstants.logInfo("Player {} currently trading - updating merchant offers", tradingPlayer);
 
-			int villagerLevel = merchant instanceof Villager villager ? villager.getVillagerData().getLevel() : 1;
+			int villagerLevel = merchant instanceof Villager villager ? villager.getVillagerData().level() : 1;
 			tradingPlayer.sendMerchantOffers(
 				tradingPlayer.containerMenu.containerId,
 				merchant.getOffers(),
