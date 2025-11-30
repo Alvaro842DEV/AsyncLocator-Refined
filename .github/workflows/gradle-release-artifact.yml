@@ -46,7 +46,7 @@ jobs:
           modrinth-token: ${{ secrets.MODRINTH_TOKEN }}
           curseforge-id: 625069
           curseforge-token: ${{ secrets.CURSEFORGE_TOKEN }}
-          name: [ ${ { matrix.mod-loader } } ${ { env.minecraft-version } } ] ${{ env.mod-version }}
+          name: [${{ matrix.mod-loader }} ${{ env.minecraft-version }}] ${{ env.mod-version }}
           changelog-file: CHANGELOG.md
           java: 17
           files: |
