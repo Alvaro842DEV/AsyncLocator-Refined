@@ -25,29 +25,24 @@ public class AsyncLocator {
 
 	private AsyncLocator() {}
 
-	// Initializes the singleton executor for locating tasks
+	/**
+	 * Initializes the singleton executor for locating tasks using Java 21 Virtual Threads.
+	 * 
+	 * After v1.5.1, we use virtual threads, which are lightweight and managed by the JVM, not the OS.
+	 * There is no need to configure thread pool size anymore (automatically scaled)
+	 */
 	public static void setupExecutorService() {
 		synchronized (AsyncLocator.class) {
 			shutdownExecutorService();
 
-			int threads = Services.CONFIG.locatorThreads();
-			if (threads <= 0) {
-				ALConstants.logWarn("Configured locatorThreads <= 0 ({}). Falling back to 1 thread", threads);
-				threads = 1;
-			}
-			ALConstants.logInfo("Starting locating executor service with thread pool size of {}", threads);
+			ALConstants.logInfo("Starting locating executor service with virtual threads (Java 21+)");
 
-			final String namePrefix = ALConstants.MOD_ID + "-" + POOL_COUNTER.getAndIncrement() + "-thread-";
-			final AtomicInteger threadNum = new AtomicInteger(1);
-
-			LOCATING_EXECUTOR_SERVICE = Executors.newFixedThreadPool(
-				threads,
-				r -> {
-					Thread t = new Thread(r, namePrefix + threadNum.getAndIncrement());
-					t.setDaemon(true);
-					t.setUncaughtExceptionHandler((th, e) -> ALConstants.logError(e, "Uncaught exception in locating thread {}", th.getName()));
-					return t;
-				}
+			LOCATING_EXECUTOR_SERVICE = Executors.newThreadPerTaskExecutor(
+				Thread.ofVirtual()
+					.name(ALConstants.MOD_ID + "-", POOL_COUNTER.getAndIncrement())
+					.uncaughtExceptionHandler((t, e) -> 
+						ALConstants.logError(e, "Uncaught exception in virtual thread {}", t.getName()))
+					.factory()
 			);
 		}
 	}
