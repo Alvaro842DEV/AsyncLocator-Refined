@@ -5,11 +5,6 @@ import brightspark.asynclocator.platform.services.ConfigHelper;
 
 public class FabricConfigHelper implements ConfigHelper {
 	@Override
-	public int locatorThreads() {
-		return AsyncLocatorConfigFabric.LOCATOR_THREADS;
-	}
-
-	@Override
 	public int biomeSearchRadius() {
 		return AsyncLocatorConfigFabric.BIOME_SEARCH_RADIUS;
 	}

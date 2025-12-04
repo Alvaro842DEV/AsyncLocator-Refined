@@ -7,7 +7,6 @@ public class AsyncLocatorModCommon {
 	public static void printConfigs() {
 		ConfigHelper config = Services.CONFIG;
 		ALConstants.logInfo("Configs:" +
-			"\nLocator Threads: " + config.locatorThreads() +
 			"\nBiome Search Radius: " + config.biomeSearchRadius() +
 			"\nRemove Offer: " + config.removeOffer() +
 			"\nDolphin Treasure Enabled: " + config.dolphinTreasureEnabled() +

@@ -2,11 +2,6 @@ package brightspark.asynclocator.platform.services;
 
 public interface ConfigHelper {
 	/**
-	 * The maximum number of threads in the async locator thread pool.
-	 */
-	int locatorThreads();
-
-	/**
 	 * The maximum search radius for the /locate biome command.
 	 */
 

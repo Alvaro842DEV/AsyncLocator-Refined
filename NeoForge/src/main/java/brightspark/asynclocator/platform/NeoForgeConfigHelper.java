@@ -6,11 +6,6 @@ import brightspark.asynclocator.platform.services.ConfigHelper;
 public class NeoForgeConfigHelper implements ConfigHelper {
 
 	@Override
-	public int locatorThreads() {
-		return AsyncLocatorConfigNeoForge.LOCATOR_THREADS.get();
-	}
-
-	@Override
 	public int biomeSearchRadius() {
 		return AsyncLocatorConfigNeoForge.BIOME_SEARCH_RADIUS.get();
 	}

@@ -4,16 +4,12 @@ import net.neoforged.neoforge.common.ModConfigSpec;
 import net.neoforged.neoforge.common.ModConfigSpec.ConfigValue;
 
 public class AsyncLocatorConfigNeoForge {
-
-	private static final int DEFAULT_THREADS = 1;
-	private static final int MAX_THREADS = 64;
 	
 	private static final int DEFAULT_BIOME_RADIUS = 6400;
 	private static final int MIN_BIOME_RADIUS = 1600;
 	private static final int MAX_BIOME_RADIUS = 12800;
 
 	public static ModConfigSpec SPEC;
-	public static ConfigValue<Integer> LOCATOR_THREADS;
 	public static ConfigValue<Integer> BIOME_SEARCH_RADIUS;
 	public static ConfigValue<Boolean> REMOVE_OFFER;
 
@@ -27,32 +23,8 @@ public class AsyncLocatorConfigNeoForge {
 
 	static {
 		ModConfigSpec.Builder builder = new ModConfigSpec.Builder();
-			LOCATOR_THREADS = builder
-				.worldRestart()
-				.comment(
-					"The maximum number of threads in the async locator thread pool.",
-					"There's an upper limit of 64. This should only be increased if you're experiencing",
-					"simultaneous location lookups causing issues AND you have the hardware capable of handling",
-					"the extra possible threads.",
-					"The default of 1 should be suitable for most users.",
-					"This value must not exceed 64."
-					)
-					.define("asyncLocatorThreads", DEFAULT_THREADS, value -> {
 
-						if (!(value instanceof Integer)) {
-							return false;
-						}
-						Integer intValue = (Integer) value;
-				
-						// Check bounds
-						if (intValue < 1 || intValue > MAX_THREADS) {
-							return false;
-						}
-				
-						return true;
-					});
-
-				BIOME_SEARCH_RADIUS = builder
+			BIOME_SEARCH_RADIUS = builder
 					.comment(
 						"Maximum search radius in blocks for /locate biome command.",
 						"The vanilla value is 6400.",
@@ -93,16 +65,6 @@ public class AsyncLocatorConfigNeoForge {
 	// Add validation method
 	public static void validateConfig() {
 		boolean needsSave = false;
-		
-		int threads = LOCATOR_THREADS.get();
-		if (threads < 1 || threads > MAX_THREADS) {
-			ALConstants.logError(
-				"Invalid locatorThreads value ({}). Must be between 1-64. Resetting to default ({}).",
-				threads, MAX_THREADS, DEFAULT_THREADS
-			);
-			LOCATOR_THREADS.set(DEFAULT_THREADS);
-			needsSave = true;
-		}
 		
 		int biomeRadius = BIOME_SEARCH_RADIUS.get();
 		if (biomeRadius < MIN_BIOME_RADIUS || biomeRadius > MAX_BIOME_RADIUS) {
