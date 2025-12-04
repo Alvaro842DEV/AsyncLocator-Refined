@@ -4,8 +4,12 @@
 	"version": "${version}",
 	"name": "Async Locator Refined",
 	"description": "Changes the searching of features to be asynchronous to mitigate associated lag",
-	"authors": ["bright_spark"],
-	"contributors": ["alvaro842 (maintainer)"],
+	"authors": [
+		"bright_spark"
+	],
+	"contributors": [
+		"alvaro842 (maintainer)"
+	],
 	"contact": {
 		"homepage": "https://modrinth.com/mod/async-locator-refined",
 		"sources": "https://github.com/Alvaro842DEV/AsyncLocator-Refined",
@@ -15,12 +19,16 @@
 	"icon": "logo.png",
 	"environment": "*",
 	"entrypoints": {
-		"main": ["brightspark.asynclocator.AsyncLocatorModFabric"]
+		"main": [
+			"brightspark.asynclocator.AsyncLocatorModFabric"
+		]
 	},
-	"mixins": ["asynclocator.mixins.json"],
+	"mixins": [
+		"asynclocator.mixins.json"
+	],
 	"depends": {
-		"fabricloader": ">=0.17.0",
-		"fabric-api": ">=0.116.2+1.21.1",
+		"fabricloader": ">=0.17.2",
+		"fabric-api": ">=0.116.4+1.21.1",
 		"minecraft": "1.21.1",
 		"java": ">=21"
 	}
