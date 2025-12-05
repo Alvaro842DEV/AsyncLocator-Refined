@@ -15,7 +15,7 @@ import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
-@Mixin(targets = "net.minecraft.world.entity.animal.Dolphin$DolphinSwimToTreasureGoal", priority = 800)
+@Mixin(targets = "net.minecraft.world.entity.animal.Dolphin$DolphinSwimToTreasureGoal")
 public class DolphinSwimToTreasureGoalMixin {
 	private LocateTask<BlockPos> locateTask = null;
 	private BlockPos asyncFoundPos = null;
@@ -75,9 +75,27 @@ public class DolphinSwimToTreasureGoalMixin {
 		return dolphin.getTreasurePos();
 	}
 
+	private static final long DOLPHIN_LOCATE_TIMEOUT_SECONDS = 30L;
+
 	private void handleFindTreasureAsync(ServerLevel level, BlockPos blockPos) {
-		locateTask = AsyncLocator.locate(level, StructureTags.DOLPHIN_LOCATED, blockPos, 50, false)
-				.thenOnServerThread(pos -> handleLocationFound(level, pos));
+		locateTask = AsyncLocator.locate(level, StructureTags.DOLPHIN_LOCATED, blockPos, 50, false);
+		locateTask.completableFuture()
+			.orTimeout(DOLPHIN_LOCATE_TIMEOUT_SECONDS, java.util.concurrent.TimeUnit.SECONDS)
+			.whenComplete((pos, throwable) -> locateTask.server().submit(() -> {
+				if (throwable instanceof java.util.concurrent.TimeoutException) {
+					ALConstants.logWarn("Dolphin treasure locate timed out after {}s - resetting goal", DOLPHIN_LOCATE_TIMEOUT_SECONDS);
+					try { locateTask.cancel(); } catch (Throwable ignore) {}
+					locateTask = null;
+					asyncFoundPos = null;
+					return;
+				} else if (throwable != null) {
+					ALConstants.logError(throwable, "Exception while locating treasure for dolphin");
+					locateTask = null;
+					asyncFoundPos = null;
+					return;
+				}
+				handleLocationFound(level, pos);
+			}));
 	}
 
 	private void handleLocationFound(ServerLevel level, BlockPos pos) {
