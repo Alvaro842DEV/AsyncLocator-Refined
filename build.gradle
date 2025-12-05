@@ -3,10 +3,12 @@ plugins {
     id 'net.neoforged.moddev' version '2.0.121' apply(false)
     id 'org.spongepowered.gradle.vanilla' version '0.2.2' apply(false)
     id("org.spongepowered.mixin") version "0.7.38" apply(false)
+    id 'com.diffplug.spotless' version '8.1.0' apply(false)
 }
 
 subprojects {
     apply plugin: 'java'
+    apply plugin: 'com.diffplug.spotless'
 
     java.toolchain.languageVersion = JavaLanguageVersion.of(21)
 
@@ -70,4 +72,19 @@ subprojects {
     tasks.withType(Test).configureEach {
         failOnNoDiscoveredTests = false
     }
+
+    spotless {
+        java {
+            target 'src/**/*.java'
+            palantirJavaFormat() // 4 spaces, no tabs, 100 characters per line
+            removeUnusedImports()
+            trimTrailingWhitespace()
+            endWithNewline()
+        }
+    }
+
+    tasks.check {
+        dependsOn 'spotlessCheck'
+    }
 }
+
