@@ -5,6 +5,9 @@ import brightspark.asynclocator.AsyncLocator;
 import brightspark.asynclocator.logic.CommonLogic;
 import brightspark.asynclocator.logic.ExplorationMapFunctionLogic;
 import brightspark.asynclocator.platform.Services;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
 import net.minecraft.core.component.DataComponents;
@@ -12,9 +15,9 @@ import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.entity.npc.AbstractVillager;
-import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.npc.Villager;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.MapItem;
@@ -36,174 +39,207 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
-
 @Mixin(ExplorationMapFunction.class)
 public abstract class ExplorationMapFunctionMixin {
     @Shadow
     @Final
     TagKey<Structure> destination;
 
-	@Shadow
-	@Final
-	byte zoom;
+    @Shadow
+    @Final
+    byte zoom;
 
-	@Shadow
-	@Final
-	int searchRadius;
+    @Shadow
+    @Final
+    int searchRadius;
 
-	@Shadow
-	@Final
-	boolean skipKnownStructures;
+    @Shadow
+    @Final
+    boolean skipKnownStructures;
 
-	@Unique
-	private ResourceKey<MapDecorationType> asyncLocator$decorationTypeKey;
+    @Unique
+    private ResourceKey<MapDecorationType> asyncLocator$decorationTypeKey;
 
-	@Inject(method = "<init>(Ljava/util/List;Lnet/minecraft/tags/TagKey;Lnet/minecraft/core/Holder;BIZ)V",
-			at = @At("RETURN"))
-	private void captureDecorationKey(List<LootItemCondition> conditions, TagKey<Structure> dest, Holder<MapDecorationType> typeHolder, byte zm, int radius, boolean skip, CallbackInfo ci) {
-		typeHolder.unwrapKey().ifPresentOrElse(
-			key -> this.asyncLocator$decorationTypeKey = key,
-			() -> {
-				ALConstants.logWarn("Failed to find registered key for MapDecorationType Holder {} in ExplorationMapFunction constructor", typeHolder);
-				this.asyncLocator$decorationTypeKey = null;
-			}
-		);
-	}
+    @Inject(
+            method = "<init>(Ljava/util/List;Lnet/minecraft/tags/TagKey;Lnet/minecraft/core/Holder;BIZ)V",
+            at = @At("RETURN"))
+    private void captureDecorationKey(
+            List<LootItemCondition> conditions,
+            TagKey<Structure> dest,
+            Holder<MapDecorationType> typeHolder,
+            byte zm,
+            int radius,
+            boolean skip,
+            CallbackInfo ci) {
+        typeHolder.unwrapKey().ifPresentOrElse(key -> this.asyncLocator$decorationTypeKey = key, () -> {
+            ALConstants.logWarn(
+                    "Failed to find registered key for MapDecorationType Holder {} in ExplorationMapFunction constructor",
+                    typeHolder);
+            this.asyncLocator$decorationTypeKey = null;
+        });
+    }
 
-	@Unique
-	private Optional<Holder<MapDecorationType>> getDecorationHolderFromKey(LootContext context) {
-		if (this.asyncLocator$decorationTypeKey == null) return Optional.empty();
-		return context.getLevel().registryAccess().registry(Registries.MAP_DECORATION_TYPE)
-				.flatMap(registry -> registry.getHolder(this.asyncLocator$decorationTypeKey));
-	}
+    @Unique
+    private Optional<Holder<MapDecorationType>> getDecorationHolderFromKey(LootContext context) {
+        if (this.asyncLocator$decorationTypeKey == null) return Optional.empty();
+        return context.getLevel()
+                .registryAccess()
+                .registry(Registries.MAP_DECORATION_TYPE)
+                .flatMap(registry -> registry.getHolder(this.asyncLocator$decorationTypeKey));
+    }
 
-	@Unique
-	private static void asyncLocator$refreshMerchantUIIfApplicable(LootContext context) {
-		var entity = context.getParamOrNull(LootContextParams.THIS_ENTITY);
-		if (entity instanceof AbstractVillager merchant) {
-			if (merchant.getTradingPlayer() instanceof ServerPlayer tradingPlayer) {
-				int villagerLevel = merchant instanceof Villager villager ? villager.getVillagerData().getLevel() : 1;
-				tradingPlayer.sendMerchantOffers(
-					tradingPlayer.containerMenu.containerId,
-					merchant.getOffers(),
-					villagerLevel,
-					merchant.getVillagerXp(),
-					merchant.showProgressBar(),
-					merchant.canRestock()
-				);
-				ALConstants.logDebug("Refreshed merchant offers for trade UI");
-			}
-		}
-	}
+    @Unique
+    private static void asyncLocator$refreshMerchantUIIfApplicable(LootContext context) {
+        var entity = context.getParamOrNull(LootContextParams.THIS_ENTITY);
+        if (entity instanceof AbstractVillager merchant) {
+            if (merchant.getTradingPlayer() instanceof ServerPlayer tradingPlayer) {
+                int villagerLevel = merchant instanceof Villager villager
+                        ? villager.getVillagerData().getLevel()
+                        : 1;
+                tradingPlayer.sendMerchantOffers(
+                        tradingPlayer.containerMenu.containerId,
+                        merchant.getOffers(),
+                        villagerLevel,
+                        merchant.getVillagerXp(),
+                        merchant.showProgressBar(),
+                        merchant.canRestock());
+                ALConstants.logDebug("Refreshed merchant offers for trade UI");
+            }
+        }
+    }
 
-	@Redirect(
-		method = "run(Lnet/minecraft/world/item/ItemStack;Lnet/minecraft/world/level/storage/loot/LootContext;)Lnet/minecraft/world/item/ItemStack;",
-		at = @At(
-			value = "INVOKE",
-			target = "Lnet/minecraft/world/item/MapItem;create(Lnet/minecraft/world/level/Level;IIBZZ)Lnet/minecraft/world/item/ItemStack;"
-		)
-	)
-	private ItemStack redirectMapItemCreate(
-		Level level, int x, int z, byte scale, boolean trackingPosition, boolean unlimitedTracking,
-		ItemStack originalStack_usedByRun, LootContext context_usedByRun
-	) {
-		LootContext context = context_usedByRun;
+    @Redirect(
+            method =
+                    "run(Lnet/minecraft/world/item/ItemStack;Lnet/minecraft/world/level/storage/loot/LootContext;)Lnet/minecraft/world/item/ItemStack;",
+            at =
+                    @At(
+                            value = "INVOKE",
+                            target =
+                                    "Lnet/minecraft/world/item/MapItem;create(Lnet/minecraft/world/level/Level;IIBZZ)Lnet/minecraft/world/item/ItemStack;"))
+    private ItemStack redirectMapItemCreate(
+            Level level,
+            int x,
+            int z,
+            byte scale,
+            boolean trackingPosition,
+            boolean unlimitedTracking,
+            ItemStack originalStack_usedByRun,
+            LootContext context_usedByRun) {
+        LootContext context = context_usedByRun;
 
-		if (!Services.CONFIG.explorationMapEnabled() || !(level instanceof ServerLevel serverLevel)) {
-			return MapItem.create(level, x, z, scale, trackingPosition, unlimitedTracking);
-		}
+        if (!Services.CONFIG.explorationMapEnabled() || !(level instanceof ServerLevel serverLevel)) {
+            return MapItem.create(level, x, z, scale, trackingPosition, unlimitedTracking);
+        }
 
-		Optional<Holder<MapDecorationType>> mapDecorationHolderOpt = getDecorationHolderFromKey(context);
-		if (mapDecorationHolderOpt.isEmpty()) {
-			ALConstants.logError("ExplorationMap Redirect: Couldn't get MapDecorationType Holder for key {}, falling back to vanilla map creation.", this.asyncLocator$decorationTypeKey);
-			return MapItem.create(level, x, z, scale, trackingPosition, unlimitedTracking);
-		}
+        Optional<Holder<MapDecorationType>> mapDecorationHolderOpt = getDecorationHolderFromKey(context);
+        if (mapDecorationHolderOpt.isEmpty()) {
+            ALConstants.logError(
+                    "ExplorationMap Redirect: Couldn't get MapDecorationType Holder for key {}, falling back to vanilla map creation.",
+                    this.asyncLocator$decorationTypeKey);
+            return MapItem.create(level, x, z, scale, trackingPosition, unlimitedTracking);
+        }
 
-		ALConstants.logDebug("Redirecting MapItem.create for async locator exploration map {}.", destination.location());
+        ALConstants.logDebug(
+                "Redirecting MapItem.create for async locator exploration map {}.", destination.location());
 
-		BlockPos originPos = context.getParamOrNull(LootContextParams.ORIGIN) != null
-							? BlockPos.containing(context.getParam(LootContextParams.ORIGIN))
-							: BlockPos.containing(x, level.getHeight() / 2, z);
+        BlockPos originPos = context.getParamOrNull(LootContextParams.ORIGIN) != null
+                ? BlockPos.containing(context.getParam(LootContextParams.ORIGIN))
+                : BlockPos.containing(x, level.getHeight() / 2, z);
 
-		MapItemSavedData mapData = MapItemSavedData.createFresh(
-			0,
-			0,
-			this.zoom,
-			false,
-			false,
-			serverLevel.dimension()
-		);
+        MapItemSavedData mapData = MapItemSavedData.createFresh(0, 0, this.zoom, false, false, serverLevel.dimension());
 
-		MapId newMapId = serverLevel.getFreeMapId();
-		serverLevel.setMapData(newMapId, mapData);
-		ALConstants.logDebug("Saved initial MapItemSavedData for new MapId {} for exploration map.", newMapId);
+        MapId newMapId = serverLevel.getFreeMapId();
+        serverLevel.setMapData(newMapId, mapData);
+        ALConstants.logDebug("Saved initial MapItemSavedData for new MapId {} for exploration map.", newMapId);
 
         ItemStack pendingMapStack = CommonLogic.createManagedMap();
-		pendingMapStack.set(DataComponents.MAP_ID, newMapId);
-		ALConstants.logDebug("Assigned MapId {} to exploration map ItemStack.", newMapId);
+        pendingMapStack.set(DataComponents.MAP_ID, newMapId);
+        ALConstants.logDebug("Assigned MapId {} to exploration map ItemStack.", newMapId);
 
-		AsyncLocator.locate(serverLevel, destination, originPos, searchRadius, skipKnownStructures)
-			.thenOnServerThread(foundPos -> {
-				Component mapName = ExplorationMapFunctionLogic.getCachedName(pendingMapStack);
-				BlockPos inventoryPos = context.getParamOrNull(LootContextParams.ORIGIN) != null
-						? BlockPos.containing(context.getParam(LootContextParams.ORIGIN))
-						: null;
+        AsyncLocator.locate(serverLevel, destination, originPos, searchRadius, skipKnownStructures)
+                .thenOnServerThread(foundPos -> {
+                    Component mapName = ExplorationMapFunctionLogic.getCachedName(pendingMapStack);
+                    BlockPos inventoryPos = context.getParamOrNull(LootContextParams.ORIGIN) != null
+                            ? BlockPos.containing(context.getParam(LootContextParams.ORIGIN))
+                            : null;
 
-		// First, try to update merchant offer result directly
-		boolean merchantUpdated = false;
-			var thisEntity = context.getParamOrNull(LootContextParams.THIS_ENTITY);
-			if (thisEntity instanceof AbstractVillager merchant) {
-				UUID targetId = CommonLogic.getTrackingUUID(pendingMapStack);
-				if (targetId != null) {
-					for (var offer : merchant.getOffers()) {
-						var result = offer.getResult();
-						UUID offerId = CommonLogic.getTrackingUUID(result);
-						if (targetId.equals(offerId)) {
-							if (foundPos != null) {
-								ALConstants.logDebug("Finalizing map in merchant offer (UUID: {})", offerId);
-								CommonLogic.finalizeMap(result, serverLevel, foundPos, this.zoom, mapDecorationHolderOpt.get(), mapName);
-							} else {
-								ALConstants.logDebug("Clearing pending map in merchant offer (UUID: {})", offerId);
-								CommonLogic.clearPendingState(result);
-							}
-							merchantUpdated = true;
-							break;
-						}
-					}
-				} else {
-					ALConstants.logWarn("Managed map lacks tracking UUID in trade context: cannot match offer result");
-				}
-			}
-
-			if (!merchantUpdated) {
-				if (foundPos != null) {
-					ALConstants.logInfo("Async location found for exploration map {}: {}", destination.location(), foundPos);
-					if (inventoryPos != null) {
-						// Update the map in the inventory
-						Services.EXPLORATION_MAP_FUNCTION_LOGIC.updateMap(
-							pendingMapStack, serverLevel, foundPos, this.zoom,
-							mapDecorationHolderOpt.get(), inventoryPos, mapName
-						);
-					} else {
-						// if it can't find the container, finalize the map
-						CommonLogic.finalizeMap(pendingMapStack, serverLevel, foundPos, this.zoom, mapDecorationHolderOpt.get(), mapName);
-					}
-				} else {
-					ALConstants.logInfo("Async location not found for exploration map {} -> Invalidating map in inventory (if possible)", destination.location());
-                    if (inventoryPos != null) {
-                        Services.EXPLORATION_MAP_FUNCTION_LOGIC.invalidateMap(pendingMapStack, serverLevel, inventoryPos);
-                    } else {
-                        ALConstants.logWarn("Cannot invalidate exploration map - LootContext lacks ORIGIN parameter.");
-                        CommonLogic.clearPendingState(pendingMapStack);
+                    // First, try to update merchant offer result directly
+                    boolean merchantUpdated = false;
+                    var thisEntity = context.getParamOrNull(LootContextParams.THIS_ENTITY);
+                    if (thisEntity instanceof AbstractVillager merchant) {
+                        UUID targetId = CommonLogic.getTrackingUUID(pendingMapStack);
+                        if (targetId != null) {
+                            for (var offer : merchant.getOffers()) {
+                                var result = offer.getResult();
+                                UUID offerId = CommonLogic.getTrackingUUID(result);
+                                if (targetId.equals(offerId)) {
+                                    if (foundPos != null) {
+                                        ALConstants.logDebug("Finalizing map in merchant offer (UUID: {})", offerId);
+                                        CommonLogic.finalizeMap(
+                                                result,
+                                                serverLevel,
+                                                foundPos,
+                                                this.zoom,
+                                                mapDecorationHolderOpt.get(),
+                                                mapName);
+                                    } else {
+                                        ALConstants.logDebug(
+                                                "Clearing pending map in merchant offer (UUID: {})", offerId);
+                                        CommonLogic.clearPendingState(result);
+                                    }
+                                    merchantUpdated = true;
+                                    break;
+                                }
+                            }
+                        } else {
+                            ALConstants.logWarn(
+                                    "Managed map lacks tracking UUID in trade context: cannot match offer result");
+                        }
                     }
-				}
-			}
-				asyncLocator$refreshMerchantUIIfApplicable(context);
-			});
 
-		return pendingMapStack;
-	}
+                    if (!merchantUpdated) {
+                        if (foundPos != null) {
+                            ALConstants.logInfo(
+                                    "Async location found for exploration map {}: {}",
+                                    destination.location(),
+                                    foundPos);
+                            if (inventoryPos != null) {
+                                // Update the map in the inventory
+                                Services.EXPLORATION_MAP_FUNCTION_LOGIC.updateMap(
+                                        pendingMapStack,
+                                        serverLevel,
+                                        foundPos,
+                                        this.zoom,
+                                        mapDecorationHolderOpt.get(),
+                                        inventoryPos,
+                                        mapName);
+                            } else {
+                                // if it can't find the container, finalize the map
+                                CommonLogic.finalizeMap(
+                                        pendingMapStack,
+                                        serverLevel,
+                                        foundPos,
+                                        this.zoom,
+                                        mapDecorationHolderOpt.get(),
+                                        mapName);
+                            }
+                        } else {
+                            ALConstants.logInfo(
+                                    "Async location not found for exploration map {} -> Invalidating map in inventory (if possible)",
+                                    destination.location());
+                            if (inventoryPos != null) {
+                                Services.EXPLORATION_MAP_FUNCTION_LOGIC.invalidateMap(
+                                        pendingMapStack, serverLevel, inventoryPos);
+                            } else {
+                                ALConstants.logWarn(
+                                        "Cannot invalidate exploration map - LootContext lacks ORIGIN parameter.");
+                                CommonLogic.clearPendingState(pendingMapStack);
+                            }
+                        }
+                    }
+                    asyncLocator$refreshMerchantUIIfApplicable(context);
+                });
+
+        return pendingMapStack;
+    }
 }
