@@ -16,7 +16,7 @@ minecraft {
 
 dependencies {
     compileOnly 'org.jetbrains:annotations:26.0.2'
-    compileOnly group: 'org.spongepowered', name: 'mixin', version: '0.8.7'
+    compileOnly "org.spongepowered:mixin:0.8.7"
 }
 
 processResources {

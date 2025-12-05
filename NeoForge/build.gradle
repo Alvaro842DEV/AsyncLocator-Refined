@@ -62,10 +62,17 @@ dependencies {
 
 processResources {
 	from project(":Common").sourceSets.main.resources
+
+	inputs.property "version", project.version
+	inputs.property "minecraft_version", minecraft_version
+	inputs.property "mod_id", mod_id
+	inputs.property "mod_name", mod_name
 	
+    def versionStr = project.version
+
 	filesMatching(['META-INF/neoforge.mods.toml', 'pack.mcmeta']) {
 		expand([
-			'version': project.version,
+			'version': versionStr,
 			'minecraft_version': minecraft_version,
 			'mod_id': mod_id,
 			'mod_name': mod_name
