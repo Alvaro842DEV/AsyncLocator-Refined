@@ -25,14 +25,12 @@ loom {
             setConfigName("Fabric Client")
             ideConfigGenerated(true)
             runDir("run")
-            vmArg("-Dfabric.log.level=debug")
         }
         server {
             server()
             setConfigName("Fabric Server")
             ideConfigGenerated(true)
             runDir("run")
-            vmArg("-Dfabric.log.level=debug")
         }
     }
 }
