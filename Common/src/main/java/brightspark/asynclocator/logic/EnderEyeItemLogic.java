@@ -52,7 +52,7 @@ public class EnderEyeItemLogic {
     }
 
     public static void locateAsync(ServerLevel level, Player player, EyeOfEnder eyeOfEnder, EnderEyeItem enderEyeItem) {
-        final long timeoutSeconds = 20L;
+        final long timeoutSeconds = 60L;
 
         // Use cached HolderSet lookup for better performance
         Optional<HolderSet<Structure>> holderSetOpt = getEyeOfEnderHolderSet(level);
