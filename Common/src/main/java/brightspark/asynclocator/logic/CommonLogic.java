@@ -42,6 +42,7 @@ public class CommonLogic {
     public static ItemStack createManagedMap() {
         ItemStack stack = new ItemStack(Items.FILLED_MAP);
         stack.set(DataComponents.ITEM_NAME, Component.translatable(MAP_HOVER_NAME_KEY));
+        stack.set(ALDataComponents.LOCATING, Unit.INSTANCE);
         CompoundTag customData = new CompoundTag();
         customData.putUUID(UUID_TRACKER, UUID.randomUUID());
         stack.set(DataComponents.CUSTOM_DATA, CustomData.of(customData));
