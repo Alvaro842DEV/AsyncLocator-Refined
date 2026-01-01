@@ -12,15 +12,15 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 @Mixin(Slot.class)
 public class SlotMixin {
-	@Inject(method = "mayPickup", at = @At(value = "HEAD"), cancellable = true)
-	public void preventPickupOfPendingExplorationMap(Player player, CallbackInfoReturnable<Boolean> cir) {
-		if (Services.CONFIG.explorationMapEnabled()) {
-			// Cast this to Slot to access getItem() method directly
-			Slot slot = (Slot) (Object) this;
-			if (CommonLogic.isEmptyPendingMap(slot.getItem())) {
-				ALConstants.logDebug("Intercepted Slot#mayPickup call");
-				cir.setReturnValue(false);
-			}
-		}
-	}
+    @Inject(method = "mayPickup", at = @At(value = "HEAD"), cancellable = true)
+    public void preventPickupOfPendingExplorationMap(Player player, CallbackInfoReturnable<Boolean> cir) {
+        if (Services.CONFIG.explorationMapEnabled()) {
+            // Cast this to Slot to access getItem() method directly
+            Slot slot = (Slot) (Object) this;
+            if (CommonLogic.isEmptyPendingMap(slot.getItem())) {
+                ALConstants.logDebug("Intercepted Slot#mayPickup call");
+                cir.setReturnValue(false);
+            }
+        }
+    }
 }

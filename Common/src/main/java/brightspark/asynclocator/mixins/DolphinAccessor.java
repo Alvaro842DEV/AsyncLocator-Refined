@@ -7,6 +7,6 @@ import org.spongepowered.asm.mixin.gen.Accessor;
 
 @Mixin(Dolphin.class)
 public interface DolphinAccessor {
-	@Accessor("treasurePos")
-	void asynclocator$setTreasurePos(BlockPos pos);
+    @Accessor("treasurePos")
+    void asynclocator$setTreasurePos(BlockPos pos);
 }
