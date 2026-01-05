@@ -1,11 +1,11 @@
 package brightspark.asynclocator;
 
-import brightspark.asynclocator.platform.Services;
 import com.mojang.datafixers.util.Pair;
 import java.text.NumberFormat;
 import java.util.List;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import net.minecraft.commands.arguments.ResourceOrTagArgument;
 import net.minecraft.core.BlockPos;
@@ -24,28 +24,23 @@ public class AsyncLocator {
 
     private AsyncLocator() {}
 
-    // Initializes the singleton executor for locating tasks
+    /**
+     * Initializes the singleton executor for locating tasks using Java 21 Virtual Threads.
+     *
+     * After v1.5.1, we use virtual threads, which are lightweight and managed by the JVM, not the OS.
+     * There is no need to configure thread pool size anymore (automatically scaled)
+     */
     public static void setupExecutorService() {
         synchronized (AsyncLocator.class) {
             shutdownExecutorService();
 
-            int threads = Services.CONFIG.locatorThreads();
-            if (threads <= 0) {
-                ALConstants.logWarn("Configured locatorThreads <= 0 ({}). Falling back to 1 thread", threads);
-                threads = 1;
-            }
-            ALConstants.logInfo("Starting locating executor service with thread pool size of {}", threads);
+            ALConstants.logInfo("Starting locating executor service with virtual threads (Java 21+)");
 
-            final String namePrefix = ALConstants.MOD_ID + "-" + POOL_COUNTER.getAndIncrement() + "-thread-";
-            final AtomicInteger threadNum = new AtomicInteger(1);
-
-            LOCATING_EXECUTOR_SERVICE = Executors.newFixedThreadPool(threads, r -> {
-                Thread t = new Thread(r, namePrefix + threadNum.getAndIncrement());
-                t.setDaemon(true);
-                t.setUncaughtExceptionHandler(
-                        (th, e) -> ALConstants.logError(e, "Uncaught exception in locating thread {}", th.getName()));
-                return t;
-            });
+            LOCATING_EXECUTOR_SERVICE = Executors.newThreadPerTaskExecutor(Thread.ofVirtual()
+                    .name(ALConstants.MOD_ID + "-", POOL_COUNTER.getAndIncrement())
+                    .uncaughtExceptionHandler(
+                            (t, e) -> ALConstants.logError(e, "Uncaught exception in virtual thread {}", t.getName()))
+                    .factory());
         }
     }
 
@@ -78,6 +73,16 @@ public class AsyncLocator {
         return es != null && !es.isShutdown() && !es.isTerminated();
     }
 
+    private static ExecutorService getOrCreateExecutor() {
+        synchronized (AsyncLocator.class) {
+            if (LOCATING_EXECUTOR_SERVICE == null || LOCATING_EXECUTOR_SERVICE.isShutdown()) {
+                ALConstants.logWarn("Locating executor service not initialized or not active: creating lazily");
+                setupExecutorService();
+            }
+            return LOCATING_EXECUTOR_SERVICE;
+        }
+    }
+
     /**
      * Queues a task to locate a feature using {@link ServerLevel#findNearestMapStructure(TagKey, BlockPos, int, boolean)}
      * and returns a {@link LocateTask} with the futures for it.
@@ -91,15 +96,7 @@ public class AsyncLocator {
         ALConstants.logDebug(
                 "Creating locate task for {} in {} around {} within {} chunks", structureTag, level, pos, searchRadius);
 
-        ExecutorService executor;
-        synchronized (AsyncLocator.class) {
-            executor = LOCATING_EXECUTOR_SERVICE;
-            if (executor == null || executor.isShutdown()) {
-                ALConstants.logWarn("Locating executor service not initialized or not active: creating lazily");
-                setupExecutorService();
-                executor = LOCATING_EXECUTOR_SERVICE;
-            }
-        }
+        ExecutorService executor = getOrCreateExecutor();
 
         CompletableFuture<BlockPos> completableFuture = new CompletableFuture<>();
         Future<?> future = executor.submit(
@@ -121,15 +118,7 @@ public class AsyncLocator {
         ALConstants.logDebug(
                 "Creating locate task for {} in {} around {} within {} chunks", structureSet, level, pos, searchRadius);
 
-        ExecutorService executor;
-        synchronized (AsyncLocator.class) {
-            executor = LOCATING_EXECUTOR_SERVICE;
-            if (executor == null || executor.isShutdown()) {
-                ALConstants.logWarn("Locating executor service not initialized or not active: creating lazily");
-                setupExecutorService();
-                executor = LOCATING_EXECUTOR_SERVICE;
-            }
-        }
+        ExecutorService executor = getOrCreateExecutor();
 
         CompletableFuture<Pair<BlockPos, Holder<Structure>>> completableFuture = new CompletableFuture<>();
         Future<?> future = executor.submit(() ->
@@ -151,15 +140,15 @@ public class AsyncLocator {
             BlockPos foundPos = level.findNearestMapStructure(structureTag, pos, searchRadius, skipExistingChunks);
             String time =
                     NumberFormat.getNumberInstance().format(TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start));
-            if (foundPos == null) ALConstants.logInfo("No {} found (took {}ms)", structureTag, time);
-            else ALConstants.logInfo("Found {} at {} (took {}ms)", structureTag, foundPos, time);
+            if (foundPos == null) {
+                ALConstants.logInfo("No {} found (took {}ms)", structureTag, time);
+            } else {
+                ALConstants.logInfo("Found {} at {} (took {}ms)", structureTag, foundPos, time);
+            }
             completableFuture.complete(foundPos);
         } catch (Throwable t) {
             ALConstants.logError(t, "Exception while locating {} around {}", structureTag, pos);
-            try {
-                completableFuture.complete(null);
-            } catch (Throwable ignore) {
-            }
+            completableFuture.completeExceptionally(t);
         }
     }
 
@@ -179,20 +168,19 @@ public class AsyncLocator {
                     .findNearestMapStructure(level, structureSet, pos, searchRadius, skipExistingChunks);
             String time =
                     NumberFormat.getNumberInstance().format(TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start));
-            if (foundPair == null) ALConstants.logInfo("No {} found (took {}ms)", structureSet, time);
-            else
+            if (foundPair == null) {
+                ALConstants.logInfo("No {} found (took {}ms)", structureSet, time);
+            } else {
                 ALConstants.logInfo(
                         "Found {} at {} (took {}ms)",
                         foundPair.getSecond().value().getClass().getSimpleName(),
                         foundPair.getFirst(),
                         time);
+            }
             completableFuture.complete(foundPair);
         } catch (Throwable t) {
             ALConstants.logError(t, "Exception while locating {} around {}", structureSet, pos);
-            try {
-                completableFuture.complete(null);
-            } catch (Throwable ignore) {
-            }
+            completableFuture.completeExceptionally(t);
         }
     }
 
@@ -211,15 +199,7 @@ public class AsyncLocator {
                 pos,
                 searchRadius);
 
-        ExecutorService executor;
-        synchronized (AsyncLocator.class) {
-            executor = LOCATING_EXECUTOR_SERVICE;
-            if (executor == null || executor.isShutdown()) {
-                ALConstants.logWarn("Locating executor service not initialized or not active: creating lazily");
-                setupExecutorService();
-                executor = LOCATING_EXECUTOR_SERVICE;
-            }
-        }
+        ExecutorService executor = getOrCreateExecutor();
 
         CompletableFuture<Pair<BlockPos, Holder<Biome>>> completableFuture = new CompletableFuture<>();
         Future<?> future = executor.submit(() ->
@@ -262,10 +242,7 @@ public class AsyncLocator {
             completableFuture.complete(foundPair);
         } catch (Throwable t) {
             ALConstants.logError(t, "Exception while locating biomes {} around {}", biomeResult.asPrintable(), pos);
-            try {
-                completableFuture.complete(null);
-            } catch (Throwable ignore) {
-            }
+            completableFuture.completeExceptionally(t);
         }
     }
 
@@ -277,11 +254,13 @@ public class AsyncLocator {
      * The taskFuture is the future for the {@link Runnable} itself in the executor service.
      */
     public record LocateTask<T>(MinecraftServer server, CompletableFuture<T> completableFuture, Future<?> taskFuture) {
+
         /**
          * Helper function that calls {@link CompletableFuture#thenAccept(Consumer)} with the given action.
          * Bear in mind that the action will be executed from the task's thread. If you intend to change any game data,
          * it's strongly advised you use {@link #thenOnServerThread(Consumer)} instead so that it's queued and executed
          * on the main server thread instead.
+         * Note: Will NOT be called if an exception occurred: use {@link #onError} for that.
          */
         public LocateTask<T> then(Consumer<T> action) {
             completableFuture.thenAccept(action);
@@ -291,9 +270,56 @@ public class AsyncLocator {
         /**
          * Helper function that calls {@link CompletableFuture#thenAccept(Consumer)} with the given action on the server
          * thread.
+         * Note: Will NOT be called if an exception occurred: use {@link #onErrorOnServerThread} for that.
          */
         public LocateTask<T> thenOnServerThread(Consumer<T> action) {
-            completableFuture.thenAccept(pos -> server.submit(() -> action.accept(pos)));
+            completableFuture.thenAccept(result -> server.submit(() -> action.accept(result)));
+            return this;
+        }
+
+        /**
+         * Executes errorHandler when task fails with an exception (on task's thread).
+         */
+        public LocateTask<T> onError(Consumer<Throwable> errorHandler) {
+            completableFuture.exceptionally(t -> {
+                errorHandler.accept(t);
+                return null;
+            });
+            return this;
+        }
+
+        /**
+         * Executes errorHandler when task fails with an exception (on server thread)
+         */
+        public LocateTask<T> onErrorOnServerThread(Consumer<Throwable> errorHandler) {
+            completableFuture.exceptionally(t -> {
+                server.submit(() -> errorHandler.accept(t));
+                return null;
+            });
+            return this;
+        }
+
+        /**
+         * Handles both success and error cases (on task's thread).
+         * @param handler receives (result, throwable) one will always be null
+         */
+        public LocateTask<T> handle(BiConsumer<T, Throwable> handler) {
+            completableFuture.handle((result, throwable) -> {
+                handler.accept(result, throwable);
+                return null;
+            });
+            return this;
+        }
+
+        /**
+         * Handles both success and error cases (on server thread)
+         * @param handler receives (result, throwable) one will always be null
+         */
+        public LocateTask<T> handleOnServerThread(BiConsumer<T, Throwable> handler) {
+            completableFuture.handle((result, throwable) -> {
+                server.submit(() -> handler.accept(result, throwable));
+                return null;
+            });
             return this;
         }
 
