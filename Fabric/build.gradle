@@ -18,9 +18,6 @@ loom {
     if (project(":Common").file("src/main/resources/${mod_id}.accesswidener").exists()) {
         accessWidenerPath.set(project(":Common").file("src/main/resources/${mod_id}.accesswidener"))
     }
-    mixin {
-        defaultRefmapName.set("${mod_id}.refmap.json")
-    }
     runs {
         client {
             client()
@@ -37,17 +34,27 @@ loom {
     }
 }
 
+
+tasks.withType(Test).configureEach {
+    failOnNoDiscoveredTests = false
+}
+
 processResources {
     from project(":Common").sourceSets.main.resources
 
-	filesMatching('fabric.mod.json') {
-		expand([
-			'version'          : project.version,
-			'minecraft_version': minecraft_version,
-			'mod_id'           : mod_id,
-			'mod_name'         : mod_name
-		])
-	}
+    def modId = mod_id
+    def modName = mod_name
+    def modVersion = project.version
+    def minecraftVersion = minecraft_version
+
+    filesMatching('fabric.mod.json') {
+        expand([
+            'version'          : modVersion,
+            'minecraft_version': minecraftVersion,
+            'mod_id'           : modId,
+            'mod_name'         : modName
+        ])
+    }
 }
 
 tasks.withType(JavaCompile).configureEach {

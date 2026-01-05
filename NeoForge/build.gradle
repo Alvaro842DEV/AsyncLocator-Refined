@@ -62,15 +62,24 @@ dependencies {
 
 processResources {
 	from project(":Common").sourceSets.main.resources
+
+	def modId = mod_id
+	def modName = mod_name
+	def modVersion = project.version
+	def minecraftVersion = minecraft_version
 	
 	filesMatching(['META-INF/neoforge.mods.toml', 'pack.mcmeta']) {
 		expand([
-			'version': project.version,
-			'minecraft_version': minecraft_version,
-			'mod_id': mod_id,
-			'mod_name': mod_name
+			'version': modVersion,
+			'minecraft_version': minecraftVersion,
+			'mod_id': modId,
+			'mod_name': modName
 		])
 	}
+}
+
+tasks.withType(Test).configureEach {
+    failOnNoDiscoveredTests = false
 }
 
 tasks.named('compileJava', JavaCompile).configure {
