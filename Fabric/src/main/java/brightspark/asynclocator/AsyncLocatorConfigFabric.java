@@ -9,27 +9,9 @@ import net.fabricmc.loader.api.FabricLoader;
 
 public class AsyncLocatorConfigFabric {
 
-    private static final int DEFAULT_THREADS = 1;
-    private static final int MAX_THREADS = 64;
-
     private static final int DEFAULT_BIOME_RADIUS = 6400;
     private static final int MIN_BIOME_RADIUS = 1600;
     private static final int MAX_BIOME_RADIUS = 12800;
-
-    @Config(
-            value = "asyncLocatorThreads",
-            comment = """
-			The maximum number of threads in the async locator thread pool.
-			There's an upper limit of 64. This should only be increased if you're experiencing
-			simultaneous location lookups causing issues AND you have the hardware capable of handling
-			the extra possible threads.
-			The default of 1 should be suitable for most users.
-			This value must not exceed 64.
-			""",
-            min = DEFAULT_THREADS,
-            max = MAX_THREADS // Practically in no case will you need the maximum amount
-            )
-    public static int LOCATOR_THREADS = 1;
 
     @Config(value = "biomeSearchRadius", comment = """
 			Maximum search radius in blocks for /locate biome command.
@@ -81,7 +63,6 @@ public class AsyncLocatorConfigFabric {
 
     // Helper method
     private static void resetToDefaults() {
-        LOCATOR_THREADS = DEFAULT_THREADS;
         BIOME_SEARCH_RADIUS = DEFAULT_BIOME_RADIUS;
         REMOVE_OFFER = false;
         FeatureToggles.DOLPHIN_TREASURE_ENABLED = true;
@@ -102,15 +83,6 @@ public class AsyncLocatorConfigFabric {
 
                 // Validate values in case of manual edits
                 boolean needsRewrite = false;
-
-                if (LOCATOR_THREADS > MAX_THREADS || LOCATOR_THREADS < 1) {
-                    ALConstants.logError(
-                            "Invalid locatorThreads value ({}). Must be between 1-64. Resetting to default ({}).",
-                            LOCATOR_THREADS,
-                            DEFAULT_THREADS);
-                    LOCATOR_THREADS = DEFAULT_THREADS;
-                    needsRewrite = true;
-                }
 
                 if (BIOME_SEARCH_RADIUS > MAX_BIOME_RADIUS || BIOME_SEARCH_RADIUS < MIN_BIOME_RADIUS) {
                     ALConstants.logError(
