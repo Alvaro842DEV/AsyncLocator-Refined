@@ -27,7 +27,7 @@
 		"asynclocator.mixins.json"
 	],
 	"depends": {
-		"fabricloader": ">=0.17.2",
+		"fabricloader": ">=0.18.0",
 		"fabric-api": ">=0.116.4+1.21.1",
 		"minecraft": "1.21.1",
 		"java": ">=21"
