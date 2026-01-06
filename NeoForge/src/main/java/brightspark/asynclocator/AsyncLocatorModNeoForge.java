@@ -13,7 +13,6 @@ import net.neoforged.neoforge.event.server.ServerStoppingEvent;
 public class AsyncLocatorModNeoForge {
 
 	public AsyncLocatorModNeoForge(IEventBus modEventBus, ModContainer modContainer) {
-		NeoForgeDataComponents.register(modEventBus);
 
 		modContainer.registerConfig(
 			ModConfig.Type.COMMON,
