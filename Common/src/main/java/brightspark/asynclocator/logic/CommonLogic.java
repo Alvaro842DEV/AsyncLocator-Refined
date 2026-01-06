@@ -1,6 +1,5 @@
 package brightspark.asynclocator.logic;
 
-import brightspark.asynclocator.ALDataComponents;
 import java.util.UUID;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
@@ -8,7 +7,6 @@ import net.minecraft.core.component.DataComponents;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.util.Unit;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.ChestMenu;
 import net.minecraft.world.item.ItemStack;
@@ -29,23 +27,47 @@ public class CommonLogic {
 
     private CommonLogic() {}
 
+    private static void upsertAsyncLocatorTag(ItemStack stack, java.util.function.UnaryOperator<CompoundTag> edit) {
+        CustomData customData = stack.get(DataComponents.CUSTOM_DATA);
+        CompoundTag tag = (customData != null) ? customData.copyTag() : new CompoundTag();
+
+        tag = edit.apply(tag);
+
+        if (tag.isEmpty()) {
+            stack.remove(DataComponents.CUSTOM_DATA);
+        } else {
+            stack.set(DataComponents.CUSTOM_DATA, CustomData.of(tag));
+        }
+    }
+
+    private static void markPending(ItemStack stack, @Nullable UUID uuid) {
+        upsertAsyncLocatorTag(stack, tag -> {
+            tag.putByte(PENDING_MARKER, (byte) 1);
+            if (uuid != null) tag.putString(UUID_TRACKER, uuid.toString());
+            return tag;
+        });
+    }
+
+    private static void clearPendingMarkers(ItemStack stack) {
+        upsertAsyncLocatorTag(stack, tag -> {
+            tag.remove(PENDING_MARKER);
+            tag.remove(UUID_TRACKER);
+            return tag;
+        });
+    }
+
     // Creates an empty "Filled Map", marks it as locating, and gives it a temporary name
     public static ItemStack createEmptyMap() {
         ItemStack stack = new ItemStack(Items.FILLED_MAP);
         stack.set(DataComponents.ITEM_NAME, Component.translatable(MAP_HOVER_NAME_KEY));
-        CompoundTag customData = new CompoundTag();
-        customData.putByte(PENDING_MARKER, (byte) 1);
-        stack.set(DataComponents.CUSTOM_DATA, CustomData.of(customData));
+        markPending(stack, null);
         return stack;
     }
 
     public static ItemStack createManagedMap() {
         ItemStack stack = new ItemStack(Items.FILLED_MAP);
         stack.set(DataComponents.ITEM_NAME, Component.translatable(MAP_HOVER_NAME_KEY));
-        CompoundTag customData = new CompoundTag();
-        customData.putString(UUID_TRACKER, UUID.randomUUID().toString());
-        stack.set(DataComponents.CUSTOM_DATA, CustomData.of(customData));
-        stack.set(ALDataComponents.LOCATING, Unit.INSTANCE);
+        markPending(stack, UUID.randomUUID());
         return stack;
     }
 
@@ -60,7 +82,7 @@ public class CommonLogic {
         level.setMapData(newMapId, mapData);
 
         stack.set(DataComponents.ITEM_NAME, Component.translatable(MAP_HOVER_NAME_KEY));
-        stack.set(ALDataComponents.LOCATING, Unit.INSTANCE);
+        markPending(stack, null);
 
         return stack;
     }
@@ -70,7 +92,7 @@ public class CommonLogic {
         if (!stack.is(Items.FILLED_MAP)) {
             return false;
         }
-        if (stack.has(ALDataComponents.LOCATING)) return true;
+
         CustomData customData = stack.get(DataComponents.CUSTOM_DATA);
         if (customData == null) return false;
         return customData.contains(PENDING_MARKER) || customData.contains(UUID_TRACKER);
@@ -91,19 +113,7 @@ public class CommonLogic {
     }
 
     public static void clearPendingState(ItemStack mapStack) {
-        mapStack.remove(ALDataComponents.LOCATING);
-
-        CustomData currentData = mapStack.get(DataComponents.CUSTOM_DATA);
-        if (currentData != null) {
-            CompoundTag newTag = currentData.copyTag();
-            newTag.remove(PENDING_MARKER);
-            newTag.remove(UUID_TRACKER);
-            if (newTag.isEmpty()) {
-                mapStack.remove(DataComponents.CUSTOM_DATA);
-            } else {
-                mapStack.set(DataComponents.CUSTOM_DATA, CustomData.of(newTag));
-            }
-        }
+        clearPendingMarkers(mapStack);
     }
 
     // Updates the data of the map

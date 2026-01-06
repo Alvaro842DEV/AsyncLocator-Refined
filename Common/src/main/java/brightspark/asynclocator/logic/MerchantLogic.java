@@ -29,7 +29,7 @@ public class MerchantLogic {
 
     public static void invalidateMap(AbstractVillager merchant, ItemStack mapStack) {
         mapStack.set(DataComponents.ITEM_NAME, Component.translatable("item.minecraft.map"));
-        mapStack.remove(brightspark.asynclocator.ALDataComponents.LOCATING);
+        CommonLogic.clearPendingState(mapStack);
 
         merchant.getOffers().stream()
                 .filter(offer -> offer.getResult() == mapStack)
