@@ -4,7 +4,6 @@ import brightspark.asynclocator.ALConstants;
 import brightspark.asynclocator.AsyncLocator;
 import brightspark.asynclocator.mixins.MerchantOfferAccess;
 import brightspark.asynclocator.platform.Services;
-import brightspark.asynclocator.ALDataComponents;
 import net.minecraft.util.Unit;
 import net.minecraft.world.level.saveddata.maps.MapId;
 import net.minecraft.world.level.saveddata.maps.MapItemSavedData;
