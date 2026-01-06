@@ -1,6 +1,6 @@
 package brightspark.asynclocator.logic;
 
-import brightspark.asynclocator.ALDataComponents;
+
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
 import net.minecraft.core.component.DataComponents;
@@ -30,77 +30,88 @@ public class CommonLogic {
 
 	private CommonLogic() {}
 
-	// Creates an empty "Filled Map", marks it as locating, and gives it a temporary name
-	public static ItemStack createEmptyMap() {
-		ItemStack stack = new ItemStack(Items.FILLED_MAP);
-		stack.set(DataComponents.ITEM_NAME, Component.translatable(MAP_HOVER_NAME_KEY));
-		CompoundTag customData = new CompoundTag();
-		customData.putByte(PENDING_MARKER, (byte) 1);
-		stack.set(DataComponents.CUSTOM_DATA, CustomData.of(customData));
-		return stack;
-	}
+	    private static void upsertAsyncLocatorTag(ItemStack stack, java.util.function.UnaryOperator<CompoundTag> edit) {
+        CustomData customData = stack.get(DataComponents.CUSTOM_DATA);
+        CompoundTag tag = (customData != null) ? customData.copyTag() : new CompoundTag();
 
-	public static ItemStack createManagedMap() {
-		ItemStack stack = new ItemStack(Items.FILLED_MAP);
-		stack.set(DataComponents.ITEM_NAME, Component.translatable(MAP_HOVER_NAME_KEY));
-		CompoundTag customData = new CompoundTag();
-		customData.putUUID(UUID_TRACKER, UUID.randomUUID());
-		stack.set(DataComponents.CUSTOM_DATA, CustomData.of(customData));
-		return stack;
-	}
+        tag = edit.apply(tag);
 
-	// This way it will render correctly in the GUI
-	public static ItemStack createMerchantMap(ServerLevel level) {
-		ItemStack stack = new ItemStack(Items.FILLED_MAP);
-		
-		MapItemSavedData mapData = MapItemSavedData.createFresh(
-			0, 0, (byte) 2, true, true, level.dimension()
-		);
-		
-		MapId newMapId = level.getFreeMapId();
-		stack.set(DataComponents.MAP_ID, newMapId);
-		level.setMapData(newMapId, mapData);
-		
-		stack.set(DataComponents.ITEM_NAME, Component.translatable(MAP_HOVER_NAME_KEY));
-		stack.set(ALDataComponents.LOCATING, Unit.INSTANCE);
-		
-		return stack;
-	}
+        if (tag.isEmpty()) {
+            stack.remove(DataComponents.CUSTOM_DATA);
+        } else {
+            stack.set(DataComponents.CUSTOM_DATA, CustomData.of(tag));
+        }
+    }
 
-	// Check if FILLED_MAP is pending
-	public static boolean isEmptyPendingMap(ItemStack stack) {
-		if (!stack.is(Items.FILLED_MAP)) {
-			return false;
-		}
-		if (stack.has(ALDataComponents.LOCATING)) return true;
-		CustomData customData = stack.get(DataComponents.CUSTOM_DATA);
-		if (customData == null) return false;
-		return customData.contains(PENDING_MARKER) || customData.contains(UUID_TRACKER);
-	}
+    private static void markPending(ItemStack stack, @Nullable UUID uuid) {
+        upsertAsyncLocatorTag(stack, tag -> {
+            tag.putByte(PENDING_MARKER, (byte) 1);
+            if (uuid != null) tag.putUUID(UUID_TRACKER, uuid);
+            return tag;
+        });
+    }
 
-	// Retrieves the tracking UUID stoerd on a managed pending map
-	public static @Nullable java.util.UUID getTrackingUUID(ItemStack stack) {
-		CustomData customData = stack.get(DataComponents.CUSTOM_DATA);
-		if (customData == null) return null;
-		CompoundTag tag = customData.copyTag();
-		return tag.hasUUID(UUID_TRACKER) ? tag.getUUID(UUID_TRACKER) : null;
-	}
+    private static void clearPendingMarkers(ItemStack stack) {
+        upsertAsyncLocatorTag(stack, tag -> {
+            tag.remove(PENDING_MARKER);
+            tag.remove(UUID_TRACKER);
+            return tag;
+        });
+    }
 
-	public static void clearPendingState(ItemStack mapStack) {
-		mapStack.remove(ALDataComponents.LOCATING);
-		
-	CustomData currentData = mapStack.get(DataComponents.CUSTOM_DATA);
-		if (currentData != null) {
-			CompoundTag newTag = currentData.copyTag();
-			newTag.remove(PENDING_MARKER);
-			newTag.remove(UUID_TRACKER);
-			if (newTag.isEmpty()) {
-				mapStack.remove(DataComponents.CUSTOM_DATA);
-			} else {
-				mapStack.set(DataComponents.CUSTOM_DATA, CustomData.of(newTag));
-			}
-		}
-	}
+    // Creates an empty "Filled Map", marks it as locating, and gives it a temporary name
+    public static ItemStack createEmptyMap() {
+        ItemStack stack = new ItemStack(Items.FILLED_MAP);
+        stack.set(DataComponents.ITEM_NAME, Component.translatable(MAP_HOVER_NAME_KEY));
+        markPending(stack, null);
+        return stack;
+    }
+
+    public static ItemStack createManagedMap() {
+        ItemStack stack = new ItemStack(Items.FILLED_MAP);
+        stack.set(DataComponents.ITEM_NAME, Component.translatable(MAP_HOVER_NAME_KEY));
+        markPending(stack, UUID.randomUUID());
+        return stack;
+    }
+
+    // This way it will render correctly in the GUI
+    public static ItemStack createMerchantMap(ServerLevel level) {
+        ItemStack stack = new ItemStack(Items.FILLED_MAP);
+
+        MapItemSavedData mapData = MapItemSavedData.createFresh(0, 0, (byte) 2, true, true, level.dimension());
+
+        MapId newMapId = level.getFreeMapId();
+        stack.set(DataComponents.MAP_ID, newMapId);
+        level.setMapData(newMapId, mapData);
+
+        stack.set(DataComponents.ITEM_NAME, Component.translatable(MAP_HOVER_NAME_KEY));
+        markPending(stack, null);
+
+        return stack;
+    }
+
+    // Check if FILLED_MAP is pending
+    public static boolean isEmptyPendingMap(ItemStack stack) {
+        if (!stack.is(Items.FILLED_MAP)) {
+            return false;
+        }
+
+        CustomData customData = stack.get(DataComponents.CUSTOM_DATA);
+        if (customData == null) return false;
+        return customData.contains(PENDING_MARKER) || customData.contains(UUID_TRACKER);
+    }
+
+    // Retrieves the tracking UUID stoerd on a managed pending map
+    public static @Nullable java.util.UUID getTrackingUUID(ItemStack stack) {
+        CustomData customData = stack.get(DataComponents.CUSTOM_DATA);
+        if (customData == null) return null;
+        CompoundTag tag = customData.copyTag();
+        return tag.hasUUID(UUID_TRACKER) ? tag.getUUID(UUID_TRACKER) : null;
+    }
+
+	    public static void clearPendingState(ItemStack mapStack) {
+        clearPendingMarkers(mapStack);
+    }
 	
 	// Updates the data of the map
 	public static void finalizeMap(
