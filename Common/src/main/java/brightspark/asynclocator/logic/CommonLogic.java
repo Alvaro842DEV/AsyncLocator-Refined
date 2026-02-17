@@ -54,18 +54,18 @@ public class CommonLogic {
 	// This way it will render correctly in the GUI
 	public static ItemStack createMerchantMap(ServerLevel level) {
 		ItemStack stack = new ItemStack(Items.FILLED_MAP);
-		
+
 		MapItemSavedData mapData = MapItemSavedData.createFresh(
 			0, 0, (byte) 2, true, true, level.dimension()
 		);
-		
+
 		MapId newMapId = level.getFreeMapId();
 		stack.set(DataComponents.MAP_ID, newMapId);
 		level.setMapData(newMapId, mapData);
-		
+
 		stack.set(DataComponents.ITEM_NAME, Component.translatable(MAP_HOVER_NAME_KEY));
 		stack.set(ALDataComponents.LOCATING, Unit.INSTANCE);
-		
+
 		return stack;
 	}
 
@@ -77,7 +77,7 @@ public class CommonLogic {
 		if (stack.has(ALDataComponents.LOCATING)) return true;
 		CustomData customData = stack.get(DataComponents.CUSTOM_DATA);
 		if (customData == null) return false;
-		return customData.contains(PENDING_MARKER) || customData.contains(UUID_TRACKER);
+		return customData.copyTag().contains(PENDING_MARKER) || customData.copyTag().contains(UUID_TRACKER);
 	}
 
 	// Retrieves the tracking UUID stoerd on a managed pending map
@@ -96,7 +96,7 @@ public class CommonLogic {
 
 	public static void clearPendingState(ItemStack mapStack) {
 		mapStack.remove(ALDataComponents.LOCATING);
-		
+
 	CustomData currentData = mapStack.get(DataComponents.CUSTOM_DATA);
 		if (currentData != null) {
 			CompoundTag newTag = currentData.copyTag();
@@ -109,7 +109,7 @@ public class CommonLogic {
 			}
 		}
 	}
-	
+
 	// Updates the data of the map
 	public static void finalizeMap(
 		ItemStack mapStack,
@@ -135,18 +135,18 @@ public class CommonLogic {
 		if (existingId == null) {
 			mapStack.set(DataComponents.MAP_ID, mapId);
 		}
-		
+
 		MapItem.renderBiomePreviewMap(level, mapStack);
 		MapItemSavedData.addTargetDecoration(mapStack, pos, "+", destinationType);
-		
+
 		if (displayName != null) {
 			mapStack.set(DataComponents.ITEM_NAME, displayName);
 		}
-		/** 
+		/**
 		 * If no displayName was provided, we keep whatever name the map already has
 		 * so we don't wipe titles set by other mods or loot
 		 */
-		
+
 	clearPendingState(mapStack);
 	}
 

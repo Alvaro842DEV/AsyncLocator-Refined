@@ -10,12 +10,25 @@ base {
 
 java {
 	toolchain {
-		languageVersion = JavaLanguageVersion.of(21)
+		languageVersion = JavaLanguageVersion.of(25)
+	}
+}
+
+repositories {
+	maven {
+		name = 'Parchment'
+		url = 'https://maven.parchmentmc.org'
 	}
 }
 
 neoForge {
 	version = neoforge_version
+
+	// Use Parchment mappings
+	parchment {
+		minecraftVersion = parchment_mc_version
+		mappingsVersion = parchment_version
+	}
 
 	// Automatically enable NeoForge AccessTransformers if the file exists
 	def atFile = file('src/main/resources/META-INF/accesstransformer.cfg')
@@ -46,8 +59,8 @@ neoForge {
 			loadedMods = [mods."${mod_id}"]
 		}
 
-		data {
-			data()
+		serverData {
+            serverData()
 			gameDirectory = project.file('run/data')
 			programArguments.addAll '--mod', mod_id, '--all', '--output', file('src/generated/resources/').getAbsolutePath(), '--existing', file('src/main/resources/').getAbsolutePath()
 
@@ -62,7 +75,7 @@ dependencies {
 
 processResources {
 	from project(":Common").sourceSets.main.resources
-	
+
 	filesMatching(['META-INF/neoforge.mods.toml', 'pack.mcmeta']) {
 		expand([
 			'version': project.version,
@@ -76,7 +89,7 @@ processResources {
 tasks.named('compileJava', JavaCompile).configure {
 	source(project(":Common").sourceSets.main.allSource)
 	options.encoding = 'UTF-8'
-	options.release = 21
+	options.release = 25
 }
 
 publishing {

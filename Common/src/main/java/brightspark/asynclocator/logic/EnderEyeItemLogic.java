@@ -13,6 +13,7 @@ import net.minecraft.tags.StructureTags;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.projectile.EyeOfEnder;
 import net.minecraft.world.item.EnderEyeItem;
+import net.minecraft.world.phys.Vec3;
 
 public class EnderEyeItemLogic {
 	private EnderEyeItemLogic() {}
@@ -75,7 +76,7 @@ public class EnderEyeItemLogic {
 							pair.getSecond().value().getClass().getSimpleName()
 						);
 						try {
-							eyeOfEnder.signalTo(pair.getFirst());
+							eyeOfEnder.signalTo(new Vec3(pair.getFirst()));
 						} catch (Throwable t) {
 							ALConstants.logError(t, "Failed to signal EyeOfEnder to position {}", pair.getFirst());
 						}
@@ -136,7 +137,7 @@ public class EnderEyeItemLogic {
 			if (pos != null) {
 				ALConstants.logInfo("Location found - updating eye of ender entity");
 				try {
-					eyeOfEnder.signalTo(pos);
+					eyeOfEnder.signalTo(new Vec3(pos));
 				} catch (Throwable t2) {
 					ALConstants.logError(t2, "Failed to signal EyeOfEnder to position {}", pos);
 				}

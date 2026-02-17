@@ -86,7 +86,7 @@ public class FabricExplorationMapFunctionLogicHelper implements ExplorationMapFu
 		} else {
 			ALConstants.logWarn(
 				"No Container at inventory position {} in level {}",
-				inventoryPos, level.dimension().location()
+				inventoryPos, level.dimension().identifier()
 			);
 			return false;
 		}

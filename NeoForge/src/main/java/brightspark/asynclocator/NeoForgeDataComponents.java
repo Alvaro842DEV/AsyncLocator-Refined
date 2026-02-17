@@ -1,9 +1,7 @@
 package brightspark.asynclocator;
 
-import com.mojang.serialization.Codec;
 import net.minecraft.core.component.DataComponentType;
 import net.minecraft.core.registries.Registries;
-import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.util.Unit;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.event.lifecycle.FMLCommonSetupEvent;
@@ -15,8 +13,8 @@ public class NeoForgeDataComponents {
 		DeferredRegister.create(Registries.DATA_COMPONENT_TYPE, ALConstants.MOD_ID);
 
 	public static final DeferredHolder<DataComponentType<?>, DataComponentType<Unit>> LOCATING = DATA_COMPONENTS.register("locating", () -> DataComponentType.<Unit>builder()
-		.persistent(Codec.unit(Unit.INSTANCE))
-		.networkSynchronized(StreamCodec.unit(Unit.INSTANCE))
+		.persistent(Unit.CODEC)
+		.networkSynchronized(Unit.STREAM_CODEC)
 		.build()
 	);
 

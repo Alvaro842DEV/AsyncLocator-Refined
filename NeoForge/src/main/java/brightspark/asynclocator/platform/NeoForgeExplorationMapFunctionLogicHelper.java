@@ -1,6 +1,7 @@
 package brightspark.asynclocator.platform;
 
 import brightspark.asynclocator.ALConstants;
+import brightspark.asynclocator.ItemResourceUtils;
 import brightspark.asynclocator.logic.CommonLogic;
 import brightspark.asynclocator.platform.services.ExplorationMapFunctionLogicHelper;
 import net.minecraft.core.BlockPos;
@@ -12,8 +13,10 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.saveddata.maps.MapDecorationType;
 import net.neoforged.neoforge.capabilities.Capabilities;
-import net.neoforged.neoforge.items.IItemHandler;
-import net.neoforged.neoforge.items.IItemHandlerModifiable;
+import net.neoforged.neoforge.transfer.CombinedResourceHandler;
+import net.neoforged.neoforge.transfer.ResourceHandler;
+import net.neoforged.neoforge.transfer.item.ItemResource;
+import net.neoforged.neoforge.transfer.item.ItemUtil;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.UUID;
@@ -33,19 +36,22 @@ public class NeoForgeExplorationMapFunctionLogicHelper
 				"Invalidating map in Forge inventory slot {}",
 				slot
 			);
-			if (handler instanceof IItemHandlerModifiable modifiableHandler) {
-				modifiableHandler.setStackInSlot(
-					slot,
-					new ItemStack(Items.MAP)
-				);
+
+			if (handler instanceof CombinedResourceHandler<ItemResource> modifiableHandler) {
+				ItemResourceUtils.setStackInSlot(
+                        modifiableHandler,
+                        slot,
+                        new ItemStack(Items.MAP)
+                );
 			} else {
-				ItemStack extracted = handler.extractItem(
+				ItemStack extracted = ItemResourceUtils.extractItem(
+                        handler,
 					slot,
 					mapStack.getCount(),
 					false
 				);
 				if (!extracted.isEmpty()) {
-					handler.insertItem(slot, new ItemStack(Items.MAP), false);
+                    ItemUtil.insertItemReturnRemaining(handler, slot, new ItemStack(Items.MAP), false, null);
 				}
 			}
 		});
@@ -66,17 +72,17 @@ public class NeoForgeExplorationMapFunctionLogicHelper
 		@Nullable Component displayName
 	) {
 		boolean updated = handleUpdateMapInChest(mapStack, level, invPos, (handler, slot) -> {
-			ItemStack actualStack = handler.getStackInSlot(slot);
+            ItemStack actualStack = ItemUtil.getStack(handler, slot);
 
-			CommonLogic.finalizeMap(actualStack, level, pos, scale, destinationTypeHolder, displayName);
-			// finalize the actual stack
-			ALConstants.logDebug("Updated map in NeoForge inventory slot {}, broadcasting changes.", slot);
+            CommonLogic.finalizeMap(actualStack, level, pos, scale, destinationTypeHolder, displayName);
+            // finalize the actual stack
+            ALConstants.logDebug("Updated map in NeoForge inventory slot {}, broadcasting changes.", slot);
 
-			if (handler instanceof IItemHandlerModifiable modifiableHandler) {
-				modifiableHandler.setStackInSlot(slot, actualStack);
+            if (handler instanceof CombinedResourceHandler<ItemResource> modifiableHandler) {
+				ItemResourceUtils.setStackInSlot(modifiableHandler, slot, actualStack);
 			} else {
-				handler.extractItem(slot, actualStack.getCount(), false);
-				handler.insertItem(slot, actualStack, false);
+				ItemResourceUtils.extractItem(handler, slot, actualStack.getCount(), false);
+				ItemUtil.insertItemReturnRemaining(handler, slot, actualStack, false, null);
 			}
 		});
 		if (!updated) {
@@ -88,18 +94,18 @@ public class NeoForgeExplorationMapFunctionLogicHelper
 		ItemStack mapStackToFind,
 		ServerLevel level,
 		BlockPos inventoryPos,
-		BiConsumer<IItemHandler, Integer> handleSlotFound
+		BiConsumer<ResourceHandler<ItemResource>, Integer> handleSlotFound
 	) {
 		BlockEntity be = level.getBlockEntity(inventoryPos);
 		if (be != null) {
-			IItemHandler itemHandler = level.getCapability(Capabilities.ItemHandler.BLOCK, inventoryPos, null);
+			ResourceHandler<ItemResource> itemHandler = level.getCapability(Capabilities.Item.BLOCK, inventoryPos, null);
 			if (itemHandler != null) {
 				boolean found = false;
 				UUID targetId = CommonLogic.getTrackingUUID(mapStackToFind);
 
 				if (targetId != null) {
-					for (int i = 0; i < itemHandler.getSlots(); i++) {
-						ItemStack slotStack = itemHandler.getStackInSlot(i);
+					for (int i = 0; i < itemHandler.size(); i++) {
+						ItemStack slotStack = ItemUtil.getStack(itemHandler, i);
 						UUID slotId = CommonLogic.getTrackingUUID(slotStack);
 						if (targetId.equals(slotId)) {
 							handleSlotFound.accept(itemHandler, i);
@@ -130,7 +136,7 @@ public class NeoForgeExplorationMapFunctionLogicHelper
 			ALConstants.logWarn(
 				"Couldn't find block entity at inventory position {} in level {}",
 				inventoryPos,
-				level.dimension().location()
+				level.dimension().identifier()
 			);
 			return false;
 		}

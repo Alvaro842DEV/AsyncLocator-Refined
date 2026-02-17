@@ -7,7 +7,7 @@ import brightspark.asynclocator.platform.Services;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.StructureTags;
-import net.minecraft.world.entity.animal.Dolphin;
+import net.minecraft.world.entity.animal.dolphin.Dolphin;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.core.HolderSet;
 import net.minecraft.core.Registry;
@@ -55,7 +55,7 @@ public class DolphinSwimToTreasureGoalMixin {
     // Keep goal alive while an async locating task is ongoing
 	@Inject(method = "canContinueToUse", at = @At(value = "HEAD"), cancellable = true)
 	public void continueToUseIfLocatingTreasure(CallbackInfoReturnable<Boolean> cir) {
-		if (locateTask != null && this.dolphin.gotFish() && this.dolphin.getAirSupply() >= 100) { 
+		if (locateTask != null && this.dolphin.gotFish() && this.dolphin.getAirSupply() >= 100) {
 			cir.setReturnValue(true);
 		}
 	}
@@ -71,7 +71,7 @@ public class DolphinSwimToTreasureGoalMixin {
 	}
 
     /*
-     * Skip ticking while a locate task is active so dolphin 
+     * Skip ticking while a locate task is active so dolphin
      * doesn't try to go towards an old treasure position
      */
 	@Inject(method = "tick", at = @At(value = "HEAD"), cancellable = true)
