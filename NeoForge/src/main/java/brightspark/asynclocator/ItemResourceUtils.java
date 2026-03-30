@@ -26,7 +26,8 @@ public class ItemResourceUtils {
         }
     }
 
-    public static void setStackInSlot(CombinedResourceHandler<ItemResource> combinedResourceHandler, int slot, ItemStack stack) {
+    public static void setStackInSlot(
+            CombinedResourceHandler<ItemResource> combinedResourceHandler, int slot, ItemStack stack) {
         /*
         slot = combinedResourceHandler.getAmountAsInt(slot, index);*/
         int index = combinedResourceHandler.getAmountAsInt(slot);

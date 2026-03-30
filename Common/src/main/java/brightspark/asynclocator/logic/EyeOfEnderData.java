@@ -1,5 +1,5 @@
 package brightspark.asynclocator.logic;
 
 public interface EyeOfEnderData {
-	void setLocateTaskOngoing(boolean locateTaskOngoing);
+    void setLocateTaskOngoing(boolean locateTaskOngoing);
 }
