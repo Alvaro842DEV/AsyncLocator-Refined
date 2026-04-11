@@ -1,5 +1,6 @@
 package brightspark.asynclocator.logic;
 
+import brightspark.asynclocator.ALConstants;
 import java.util.UUID;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
@@ -7,6 +8,7 @@ import net.minecraft.core.component.DataComponents;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.ChestMenu;
 import net.minecraft.world.item.ItemStack;
@@ -149,6 +151,64 @@ public class CommonLogic {
             Holder<MapDecorationType> destinationTypeHolder,
             @Nullable Component displayName) {
         finalizeMap(mapStack, level, pos, 2, destinationTypeHolder, displayName);
+    }
+
+    /**
+     * Looks through every online player's open container for the pending map
+     * and finalizes it in place. Is better and more compatible than exposing
+     * a block entity capability.
+     */
+    public static boolean tryUpdateMapInPlayerContainers(
+            ServerLevel level,
+            ItemStack pendingMapStack,
+            BlockPos pos,
+            int scale,
+            Holder<MapDecorationType> destinationType,
+            @Nullable Component displayName) {
+        UUID targetId = getTrackingUUID(pendingMapStack);
+        if (targetId == null) return false;
+
+        for (ServerPlayer player : level.getServer().getPlayerList().getPlayers()) {
+            AbstractContainerMenu menu = player.containerMenu;
+            for (int i = 0; i < menu.slots.size(); i++) {
+                ItemStack slotStack = menu.getSlot(i).getItem();
+                UUID slotId = getTrackingUUID(slotStack);
+                if (targetId.equals(slotId)) {
+                    finalizeMap(slotStack, level, pos, scale, destinationType, displayName);
+                    menu.broadcastChanges();
+                    ALConstants.logDebug(
+                            "Updated pending map via player {}'s container slot {}",
+                            player.getName().getString(),
+                            i);
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    // If no structure was found, replaces it with a blank map
+    public static boolean tryInvalidateMapInPlayerContainers(ServerLevel level, ItemStack pendingMapStack) {
+        UUID targetId = getTrackingUUID(pendingMapStack);
+        if (targetId == null) return false;
+
+        for (ServerPlayer player : level.getServer().getPlayerList().getPlayers()) {
+            AbstractContainerMenu menu = player.containerMenu;
+            for (int i = 0; i < menu.slots.size(); i++) {
+                ItemStack slotStack = menu.getSlot(i).getItem();
+                UUID slotId = getTrackingUUID(slotStack);
+                if (targetId.equals(slotId)) {
+                    menu.getSlot(i).set(new ItemStack(Items.MAP));
+                    menu.broadcastChanges();
+                    ALConstants.logDebug(
+                            "Invalidated pending map via player {}'s container slot {}",
+                            player.getName().getString(),
+                            i);
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     /**
