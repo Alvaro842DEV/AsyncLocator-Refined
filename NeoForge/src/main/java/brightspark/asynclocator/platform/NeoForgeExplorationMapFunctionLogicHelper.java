@@ -65,7 +65,8 @@ public class NeoForgeExplorationMapFunctionLogicHelper implements ExplorationMap
         });
         if (!updated) {
             ALConstants.logDebug(
-                    "NeoForge updateMap fallback: no container/slot match. Pending map already finalized in-place.");
+                    "NeoForge updateMap fallback: no container/slot match. Finalizing pending map in-place.");
+            CommonLogic.finalizeMap(mapStack, level, pos, scale, destinationTypeHolder, displayName);
         }
     }
 
