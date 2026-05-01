@@ -1,13 +1,12 @@
 package brightspark.asynclocator.logic;
 
-
+import java.util.UUID;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.util.Unit;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.ChestMenu;
 import net.minecraft.world.item.ItemStack;
@@ -21,16 +20,14 @@ import net.minecraft.world.level.saveddata.maps.MapId;
 import net.minecraft.world.level.saveddata.maps.MapItemSavedData;
 import org.jetbrains.annotations.Nullable;
 
-import java.util.UUID;
-
 public class CommonLogic {
-	private static final String MAP_HOVER_NAME_KEY = "menu.working";
-	private static final String PENDING_MARKER = "asynclocator.pending";
-	private static final String UUID_TRACKER = PENDING_MARKER + ".uuid";
+    private static final String MAP_HOVER_NAME_KEY = "menu.working";
+    private static final String PENDING_MARKER = "asynclocator.pending";
+    private static final String UUID_TRACKER = PENDING_MARKER + ".uuid";
 
-	private CommonLogic() {}
+    private CommonLogic() {}
 
-	    private static void upsertAsyncLocatorTag(ItemStack stack, java.util.function.UnaryOperator<CompoundTag> edit) {
+    private static void upsertAsyncLocatorTag(ItemStack stack, java.util.function.UnaryOperator<CompoundTag> edit) {
         CustomData customData = stack.get(DataComponents.CUSTOM_DATA);
         CompoundTag tag = (customData != null) ? customData.copyTag() : new CompoundTag();
 
@@ -109,86 +106,77 @@ public class CommonLogic {
         return tag.hasUUID(UUID_TRACKER) ? tag.getUUID(UUID_TRACKER) : null;
     }
 
-	    public static void clearPendingState(ItemStack mapStack) {
+    public static void clearPendingState(ItemStack mapStack) {
         clearPendingMarkers(mapStack);
     }
-	
-	// Updates the data of the map
-	public static void finalizeMap(
-		ItemStack mapStack,
-		ServerLevel level,
-		BlockPos pos,
-		int scale,
-		Holder<MapDecorationType> destinationType,
-		@Nullable Component displayName
-	) {
-		MapId existingId = mapStack.get(DataComponents.MAP_ID);
-		MapId mapId = existingId != null ? existingId : level.getFreeMapId();
 
-		// Create or replace map data with proper settings
-		MapItemSavedData mapData = MapItemSavedData.createFresh(
-			pos.getX(),
-			pos.getZ(),
-			(byte) scale,
-			true,
-			true,
-			level.dimension()
-		);
-		level.setMapData(mapId, mapData);
-		if (existingId == null) {
-			mapStack.set(DataComponents.MAP_ID, mapId);
-		}
-		
-		MapItem.renderBiomePreviewMap(level, mapStack);
-		MapItemSavedData.addTargetDecoration(mapStack, pos, "+", destinationType);
-		
-		if (displayName != null) {
-			mapStack.set(DataComponents.ITEM_NAME, displayName);
-		}
-		/** 
-		 * If no displayName was provided, we keep whatever name the map already has
-		 * so we don't wipe titles set by other mods or loot
-		 */
-		
-	clearPendingState(mapStack);
-	}
+    // Updates the data of the map
+    public static void finalizeMap(
+            ItemStack mapStack,
+            ServerLevel level,
+            BlockPos pos,
+            int scale,
+            Holder<MapDecorationType> destinationType,
+            @Nullable Component displayName) {
+        MapId existingId = mapStack.get(DataComponents.MAP_ID);
+        MapId mapId = existingId != null ? existingId : level.getFreeMapId();
 
-	// Legacy method for compatibility, delegates to finalizeMap
-	public static void completeMapUpdate(
-		ItemStack mapStack,
-		ServerLevel level,
-		BlockPos pos,
-		Holder<MapDecorationType> destinationTypeHolder,
-		@Nullable Component displayName
-	) {
-		finalizeMap(mapStack, level, pos, 2, destinationTypeHolder, displayName);
-	}
+        // Create or replace map data with proper settings
+        MapItemSavedData mapData =
+                MapItemSavedData.createFresh(pos.getX(), pos.getZ(), (byte) scale, true, true, level.dimension());
+        level.setMapData(mapId, mapData);
+        if (existingId == null) {
+            mapStack.set(DataComponents.MAP_ID, mapId);
+        }
 
-	/**
-	 * Broadcasts slot changes to all players that have the chest container open.
-	 * Won't do anything if the BlockEntity isn't an instance of {@link ChestBlockEntity}.
-	 * Keep for backward compatibility (new method: broadcastContainerChanges)
-	 */
-	public static void broadcastChestChanges(ServerLevel level, BlockEntity be) {
-		if (!(be instanceof ChestBlockEntity chestBE))
-			return;
+        MapItem.renderBiomePreviewMap(level, mapStack);
+        MapItemSavedData.addTargetDecoration(mapStack, pos, "+", destinationType);
 
-		level.players().forEach(player -> {
-			AbstractContainerMenu container = player.containerMenu;
-			if (container instanceof ChestMenu chestMenu && chestMenu.getContainer() == chestBE) {
-				chestMenu.broadcastChanges();
-			}
-		});
-	}
+        if (displayName != null) {
+            mapStack.set(DataComponents.ITEM_NAME, displayName);
+        }
+        /**
+         * If no displayName was provided, we keep whatever name the map already has
+         * so we don't wipe titles set by other mods or loot
+         */
+        clearPendingState(mapStack);
+    }
 
-	// This works with any container
-	public static void broadcastContainerChanges(ServerLevel level, BlockEntity be, net.minecraft.world.Container container) {
-		level.players().forEach(player -> {
-			AbstractContainerMenu menu = player.containerMenu;
-			// ChestMenu is used by both chests and barrels
-			if (menu instanceof ChestMenu chestMenu && chestMenu.getContainer() == container) {
-				chestMenu.broadcastChanges();
-			}
-		});
-	}
+    // Legacy method for compatibility, delegates to finalizeMap
+    public static void completeMapUpdate(
+            ItemStack mapStack,
+            ServerLevel level,
+            BlockPos pos,
+            Holder<MapDecorationType> destinationTypeHolder,
+            @Nullable Component displayName) {
+        finalizeMap(mapStack, level, pos, 2, destinationTypeHolder, displayName);
+    }
+
+    /**
+     * Broadcasts slot changes to all players that have the chest container open.
+     * Won't do anything if the BlockEntity isn't an instance of {@link ChestBlockEntity}.
+     * Keep for backward compatibility (new method: broadcastContainerChanges)
+     */
+    public static void broadcastChestChanges(ServerLevel level, BlockEntity be) {
+        if (!(be instanceof ChestBlockEntity chestBE)) return;
+
+        level.players().forEach(player -> {
+            AbstractContainerMenu container = player.containerMenu;
+            if (container instanceof ChestMenu chestMenu && chestMenu.getContainer() == chestBE) {
+                chestMenu.broadcastChanges();
+            }
+        });
+    }
+
+    // This works with any container
+    public static void broadcastContainerChanges(
+            ServerLevel level, BlockEntity be, net.minecraft.world.Container container) {
+        level.players().forEach(player -> {
+            AbstractContainerMenu menu = player.containerMenu;
+            // ChestMenu is used by both chests and barrels
+            if (menu instanceof ChestMenu chestMenu && chestMenu.getContainer() == container) {
+                chestMenu.broadcastChanges();
+            }
+        });
+    }
 }

@@ -19,43 +19,37 @@ import org.spongepowered.asm.mixin.injection.callback.LocalCapture;
 
 @Mixin(LocateCommand.class)
 public class LocateCommandMixin {
-	@Inject(
-		method = "locateStructure",
-		at = @At(
-			value = "INVOKE",
-			target = "Lnet/minecraft/world/level/chunk/ChunkGenerator;findNearestMapStructure(Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/core/HolderSet;Lnet/minecraft/core/BlockPos;IZ)Lcom/mojang/datafixers/util/Pair;"
-		),
-		cancellable = true,
-		locals = LocalCapture.CAPTURE_FAILSOFT
-	)
-	private static void findLocationAsync(
-		CommandSourceStack sourceStack,
-		ResourceOrTagKeyArgument.Result<Structure> structureResult,
-		CallbackInfoReturnable<Integer> cir,
-		Registry<Structure> registry,
-		HolderSet<Structure> holderset
-	) {
-		if (!Services.CONFIG.locateCommandEnabled()) return;
+    @Inject(
+            method = "locateStructure",
+            at =
+                    @At(
+                            value = "INVOKE",
+                            target =
+                                    "Lnet/minecraft/world/level/chunk/ChunkGenerator;findNearestMapStructure(Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/core/HolderSet;Lnet/minecraft/core/BlockPos;IZ)Lcom/mojang/datafixers/util/Pair;"),
+            cancellable = true,
+            locals = LocalCapture.CAPTURE_FAILSOFT)
+    private static void findLocationAsync(
+            CommandSourceStack sourceStack,
+            ResourceOrTagKeyArgument.Result<Structure> structureResult,
+            CallbackInfoReturnable<Integer> cir,
+            Registry<Structure> registry,
+            HolderSet<Structure> holderset) {
+        if (!Services.CONFIG.locateCommandEnabled()) return;
 
-			ALConstants.logDebug("Intercepted LocateCommand#locate call");
-			LocateCommandLogic.locateAsync(sourceStack, structureResult, holderset);
-			cir.setReturnValue(1);
-	}
+        ALConstants.logDebug("Intercepted LocateCommand#locate call");
+        LocateCommandLogic.locateAsync(sourceStack, structureResult, holderset);
+        cir.setReturnValue(1);
+    }
 
-	@Inject(
-		method = "locateBiome",
-		at = @At("HEAD"),
-		cancellable = true
-	)
-	private static void findBiomeAsync(
-		CommandSourceStack sourceStack,
-		ResourceOrTagArgument.Result<Biome> biomeResult,
-		CallbackInfoReturnable<Integer> cir
-	) {
-		if (!Services.CONFIG.locateBiomeCommandEnabled()) return;
+    @Inject(method = "locateBiome", at = @At("HEAD"), cancellable = true)
+    private static void findBiomeAsync(
+            CommandSourceStack sourceStack,
+            ResourceOrTagArgument.Result<Biome> biomeResult,
+            CallbackInfoReturnable<Integer> cir) {
+        if (!Services.CONFIG.locateBiomeCommandEnabled()) return;
 
-		ALConstants.logDebug("Intercepted LocateCommand#locate biome call");
-		LocateCommandLogic.locateBiomeAsync(sourceStack, biomeResult);
-		cir.setReturnValue(1);
-	}
+        ALConstants.logDebug("Intercepted LocateCommand#locate biome call");
+        LocateCommandLogic.locateBiomeAsync(sourceStack, biomeResult);
+        cir.setReturnValue(1);
+    }
 }
