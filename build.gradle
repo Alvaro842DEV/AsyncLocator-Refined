@@ -69,9 +69,6 @@ subprojects {
     tasks.withType(GenerateModuleMetadata).configureEach {
         enabled = false
     }
-    tasks.withType(Test).configureEach {
-        failOnNoDiscoveredTests = false
-    }
 
     spotless {
         java {
