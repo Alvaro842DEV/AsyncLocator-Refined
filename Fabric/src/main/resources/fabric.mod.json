@@ -1,35 +1,35 @@
 {
-	"schemaVersion": 1,
-	"id": "asynclocator",
-	"version": "${version}",
-	"name": "Async Locator Refined",
-	"description": "Changes the searching of features to be asynchronous to mitigate associated lag",
-	"authors": [
-		"bright_spark"
-	],
-	"contributors": [
-		"alvaro842 (maintainer)"
-	],
-	"contact": {
-		"homepage": "https://modrinth.com/mod/async-locator-refined",
-		"sources": "https://github.com/Alvaro842DEV/AsyncLocator-Refined",
-		"issues": "https://github.com/Alvaro842DEV/AsyncLocator-Refined/issues"
-	},
-	"license": "MIT License",
-	"icon": "logo.png",
-	"environment": "*",
-	"entrypoints": {
-		"main": [
-			"brightspark.asynclocator.AsyncLocatorModFabric"
-		]
-	},
-	"mixins": [
-		"asynclocator.mixins.json"
-	],
-	"depends": {
-		"fabricloader": ">=0.18.4",
-		"fabric-api": ">=0.119.2+1.21.4",
-		"minecraft": "1.21.4",
-		"java": ">=21"
-	}
+  "schemaVersion": 1,
+  "id": "asynclocator",
+  "version": "${version}",
+  "name": "Async Locator Refined",
+  "description": "Changes the searching of features to be asynchronous to mitigate associated lag",
+  "authors": [
+    "bright_spark"
+  ],
+  "contributors": [
+    "alvaro842 (maintainer)"
+  ],
+  "contact": {
+    "homepage": "https://modrinth.com/mod/async-locator-refined",
+    "sources": "https://github.com/Alvaro842DEV/AsyncLocator-Refined",
+    "issues": "https://github.com/Alvaro842DEV/AsyncLocator-Refined/issues"
+  },
+  "license": "MIT License",
+  "icon": "logo.png",
+  "environment": "*",
+  "entrypoints": {
+    "main": [
+      "brightspark.asynclocator.AsyncLocatorModFabric"
+    ]
+  },
+  "mixins": [
+    "asynclocator.mixins.json"
+  ],
+  "depends": {
+    "fabricloader": ">=0.18.6",
+    "fabric-api": ">=0.119.2+1.21.4",
+    "minecraft": "1.21.4",
+    "java": ">=21"
+  }
 }
