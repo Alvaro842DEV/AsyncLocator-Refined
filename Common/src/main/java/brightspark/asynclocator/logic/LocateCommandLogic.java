@@ -15,7 +15,6 @@ import net.minecraft.core.Holder;
 import net.minecraft.core.HolderSet;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.commands.LocateCommand;
-import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.levelgen.structure.Structure;
 
@@ -62,7 +61,7 @@ public class LocateCommandLogic {
         int radius = Services.CONFIG.biomeSearchRadius();
 
         AsyncLocator.locateBiome(
-                        (ServerLevel) sourceStack.getLevel(),
+                        sourceStack.getLevel(),
                         biomeResult,
                         originPos,
                         radius,
