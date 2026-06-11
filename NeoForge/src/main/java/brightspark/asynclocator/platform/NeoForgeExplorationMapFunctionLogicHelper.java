@@ -9,6 +9,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.Container;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.entity.BlockEntity;
@@ -65,7 +66,8 @@ public class NeoForgeExplorationMapFunctionLogicHelper implements ExplorationMap
         });
         if (!updated) {
             ALConstants.logDebug(
-                    "NeoForge updateMap fallback: no container/slot match. Pending map already finalized in-place.");
+                    "NeoForge updateMap fallback: no container/slot match. Finalizing pending map in-place.");
+            CommonLogic.finalizeMap(mapStack, level, pos, scale, destinationTypeHolder, displayName);
         }
     }
 
@@ -87,7 +89,7 @@ public class NeoForgeExplorationMapFunctionLogicHelper implements ExplorationMap
                         UUID slotId = CommonLogic.getTrackingUUID(slotStack);
                         if (targetId.equals(slotId)) {
                             handleSlotFound.accept(itemHandler, i);
-                            CommonLogic.broadcastChestChanges(level, be);
+                            broadcastBlockContainerChanges(level, be);
                             found = true;
                             break;
                         }
@@ -114,6 +116,14 @@ public class NeoForgeExplorationMapFunctionLogicHelper implements ExplorationMap
                     inventoryPos,
                     level.dimension().location());
             return false;
+        }
+    }
+
+    private static void broadcastBlockContainerChanges(ServerLevel level, BlockEntity be) {
+        if (be instanceof Container container) {
+            CommonLogic.broadcastContainerChanges(level, be, container);
+        } else {
+            CommonLogic.broadcastChestChanges(level, be);
         }
     }
 }
