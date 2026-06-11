@@ -1,8 +1,8 @@
 plugins {
     id 'fabric-loom' version '1.14.10' apply(false)
-    id 'net.neoforged.moddev' version '2.0.137' apply(false)
+    id 'net.neoforged.moddev' version '2.0.141' apply(false)
     id 'org.spongepowered.gradle.vanilla' version '0.2.2' apply(false)
-    id 'com.diffplug.spotless' version '8.1.0' apply(false)
+    id 'com.diffplug.spotless' version '8.6.0' apply(false)
 }
 
 subprojects {
