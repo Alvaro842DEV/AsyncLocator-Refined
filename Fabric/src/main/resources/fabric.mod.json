@@ -5,15 +5,18 @@
   "name": "Async Locator Refined",
   "description": "Changes the searching of features to be asynchronous to mitigate associated lag",
   "authors": [
-    "bright_spark"
+    "alvaro842"
   ],
-  "contributors": [
-    "alvaro842 (maintainer)"
+  "credits": [
+    "bright_spark (original mod)"
   ],
   "contact": {
     "homepage": "https://modrinth.com/mod/async-locator-refined",
     "sources": "https://github.com/Alvaro842DEV/AsyncLocator-Refined",
     "issues": "https://github.com/Alvaro842DEV/AsyncLocator-Refined/issues"
+  },
+  "custom": {
+    "credits": "Thanks to bright_spark, original author of Async Locator!"
   },
   "license": "MIT License",
   "icon": "logo.png",
