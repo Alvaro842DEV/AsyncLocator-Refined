@@ -154,6 +154,7 @@ public abstract class ExplorationMapFunctionMixin {
 
         ItemStack pendingMapStack = CommonLogic.createManagedMap();
         pendingMapStack.set(DataComponents.MAP_ID, newMapId);
+        CommonLogic.LootrTarget lootrTarget = CommonLogic.getActiveLootrTarget();
         ALConstants.logDebug("Assigned MapId {} to exploration map ItemStack.", newMapId);
 
         AsyncLocator.locate(serverLevel, destination, originPos, searchRadius, skipKnownStructures)
@@ -204,13 +205,24 @@ public abstract class ExplorationMapFunctionMixin {
                                     destination.location(),
                                     foundPos);
 
-                            boolean updated = CommonLogic.tryUpdateMapInPlayerContainers(
+                            boolean updated = CommonLogic.tryUpdateMapInLootrTarget(
                                     serverLevel,
+                                    lootrTarget,
                                     pendingMapStack,
                                     foundPos,
                                     this.zoom,
                                     mapDecorationHolderOpt.get(),
                                     mapName);
+
+                            if (!updated) {
+                                updated = CommonLogic.tryUpdateMapInPlayerContainers(
+                                        serverLevel,
+                                        pendingMapStack,
+                                        foundPos,
+                                        this.zoom,
+                                        mapDecorationHolderOpt.get(),
+                                        mapName);
+                            }
 
                             if (!updated && inventoryPos != null) {
                                 Services.EXPLORATION_MAP_FUNCTION_LOGIC.updateMap(
@@ -235,14 +247,20 @@ public abstract class ExplorationMapFunctionMixin {
                                     "Async location not found for exploration map {} -> Invalidating",
                                     destination.location());
 
-                            boolean invalidated =
-                                    CommonLogic.tryInvalidateMapInPlayerContainers(serverLevel, pendingMapStack);
+                            boolean invalidated = CommonLogic.tryInvalidateMapInLootrTarget(
+                                    serverLevel, lootrTarget, pendingMapStack);
+
+                            if (!invalidated) {
+                                invalidated =
+                                        CommonLogic.tryInvalidateMapInPlayerContainers(serverLevel, pendingMapStack);
+                            }
 
                             if (!invalidated && inventoryPos != null) {
                                 Services.EXPLORATION_MAP_FUNCTION_LOGIC.invalidateMap(
                                         pendingMapStack, serverLevel, inventoryPos);
                             } else if (!invalidated) {
-                                ALConstants.logWarn("Cannot invalidate exploration map - no player container or ORIGIN parameter.");
+                                ALConstants.logWarn(
+                                        "Cannot invalidate exploration map - no player container or ORIGIN parameter.");
                                 CommonLogic.clearPendingState(pendingMapStack);
                             }
                         }

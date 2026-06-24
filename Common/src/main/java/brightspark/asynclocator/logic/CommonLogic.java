@@ -1,6 +1,7 @@
 package brightspark.asynclocator.logic;
 
 import brightspark.asynclocator.ALConstants;
+import brightspark.asynclocator.platform.Services;
 import java.util.UUID;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
@@ -9,8 +10,11 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.Container;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.ChestMenu;
+import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.MapItem;
@@ -26,8 +30,14 @@ public class CommonLogic {
     private static final String MAP_HOVER_NAME_KEY = "menu.working";
     private static final String PENDING_MARKER = "asynclocator.pending";
     private static final String UUID_TRACKER = PENDING_MARKER + ".uuid";
+    private static final String LOOTR_INVENTORY_CLASS = "noobanidus.mods.lootr.common.data.LootrInventory";
+    private static final String LOOTR_DEFAULT_LOOT_FILLER_CLASS =
+            "noobanidus.mods.lootr.common.api.data.DefaultLootFiller";
 
     private CommonLogic() {}
+
+    public record LootrTarget(
+            UUID ownerId, @Nullable UUID sourceId, @Nullable String sourceKey, Container inventory) {}
 
     private static void upsertAsyncLocatorTag(ItemStack stack, java.util.function.UnaryOperator<CompoundTag> edit) {
         CustomData customData = stack.get(DataComponents.CUSTOM_DATA);
@@ -209,6 +219,236 @@ public class CommonLogic {
             }
         }
         return false;
+    }
+
+    public static boolean tryUpdateMapInLootrTarget(
+            ServerLevel level,
+            @Nullable LootrTarget target,
+            ItemStack pendingMapStack,
+            BlockPos pos,
+            int scale,
+            Holder<MapDecorationType> destinationType,
+            @Nullable Component displayName) {
+        if (target == null) return false;
+
+        return tryUpdateMapInLootrMenu(level, target, pendingMapStack, pos, scale, destinationType, displayName)
+                || tryUpdateMapInLootrInventory(
+                        target.inventory(), pendingMapStack, level, pos, scale, destinationType, displayName);
+    }
+
+    public static boolean tryInvalidateMapInLootrTarget(
+            ServerLevel level, @Nullable LootrTarget target, ItemStack pendingMapStack) {
+        if (target == null) return false;
+
+        return tryInvalidateMapInLootrMenu(level, target, pendingMapStack)
+                || tryInvalidateMapInLootrInventory(target.inventory(), pendingMapStack);
+    }
+
+    private static boolean tryUpdateMapInLootrMenu(
+            ServerLevel level,
+            LootrTarget target,
+            ItemStack pendingMapStack,
+            BlockPos pos,
+            int scale,
+            Holder<MapDecorationType> destinationType,
+            @Nullable Component displayName) {
+        ServerPlayer player = level.getServer().getPlayerList().getPlayer(target.ownerId());
+        if (player == null) return false;
+
+        AbstractContainerMenu menu = player.containerMenu;
+        if (!isTargetLootrChestMenu(menu, target)) return false;
+
+        UUID targetId = getTrackingUUID(pendingMapStack);
+        if (targetId == null) return false;
+
+        for (int i = 0; i < menu.slots.size(); i++) {
+            Slot slot = menu.getSlot(i);
+            ItemStack slotStack = slot.getItem();
+            UUID slotId = getTrackingUUID(slotStack);
+            if (targetId.equals(slotId)) {
+                finalizeMap(slotStack, level, pos, scale, destinationType, displayName);
+                slot.set(slotStack);
+                slot.setChanged();
+                menu.broadcastChanges();
+                ALConstants.logDebug(
+                        "Updated pending map via player {}'s Lootr menu slot {}",
+                        player.getName().getString(),
+                        i);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean tryInvalidateMapInLootrMenu(
+            ServerLevel level, LootrTarget target, ItemStack pendingMapStack) {
+        ServerPlayer player = level.getServer().getPlayerList().getPlayer(target.ownerId());
+        if (player == null) return false;
+
+        AbstractContainerMenu menu = player.containerMenu;
+        if (!isTargetLootrChestMenu(menu, target)) return false;
+
+        UUID targetId = getTrackingUUID(pendingMapStack);
+        if (targetId == null) return false;
+
+        for (int i = 0; i < menu.slots.size(); i++) {
+            Slot slot = menu.getSlot(i);
+            ItemStack slotStack = slot.getItem();
+            UUID slotId = getTrackingUUID(slotStack);
+            if (targetId.equals(slotId)) {
+                slot.set(new ItemStack(Items.MAP));
+                slot.setChanged();
+                menu.broadcastChanges();
+                ALConstants.logDebug(
+                        "Invalidated pending map via player's {} Lootr menu slot {}",
+                        player.getName().getString(),
+                        i);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean tryUpdateMapInLootrInventory(
+            @Nullable Container container,
+            ItemStack pendingMapStack,
+            ServerLevel level,
+            BlockPos pos,
+            int scale,
+            Holder<MapDecorationType> destinationType,
+            @Nullable Component displayName) {
+        if (container == null || !isLootrInventory(container)) return false;
+
+        UUID targetId = getTrackingUUID(pendingMapStack);
+        if (targetId == null) return false;
+
+        for (int i = 0; i < container.getContainerSize(); i++) {
+            ItemStack slotStack = container.getItem(i);
+            UUID slotId = getTrackingUUID(slotStack);
+            if (targetId.equals(slotId)) {
+                finalizeMap(slotStack, level, pos, scale, destinationType, displayName);
+                container.setItem(i, slotStack);
+                container.setChanged();
+                ALConstants.logDebug("Updated pending map via Lootr inventory slot {}", i);
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static boolean tryInvalidateMapInLootrInventory(@Nullable Container container, ItemStack pendingMapStack) {
+        if (container == null || !isLootrInventory(container)) return false;
+
+        UUID targetId = getTrackingUUID(pendingMapStack);
+        if (targetId == null) return false;
+
+        for (int i = 0; i < container.getContainerSize(); i++) {
+            ItemStack slotStack = container.getItem(i);
+            UUID slotId = getTrackingUUID(slotStack);
+            if (targetId.equals(slotId)) {
+                container.setItem(i, new ItemStack(Items.MAP));
+                container.setChanged();
+                ALConstants.logDebug("Invalidated pending map via Lootr inventory slot {}", i);
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    public static @Nullable LootrTarget getActiveLootrTarget() {
+        if (!Services.PLATFORM.isModLoaded("lootr")) return null;
+
+        try {
+            Class<?> fillerClass = Class.forName(LOOTR_DEFAULT_LOOT_FILLER_CLASS);
+            Object state = fillerClass.getMethod("getFillerState").invoke(null);
+            if (state == null) return null;
+
+            Object container = state.getClass().getMethod("container").invoke(state);
+            Object player = state.getClass().getMethod("player").invoke(state);
+            if (container instanceof Container lootrContainer
+                    && isLootrInventory(lootrContainer)
+                    && player instanceof Player lootrOwner) {
+                Object provider = state.getClass().getMethod("provider").invoke(state);
+                UUID sourceId = readInfoUUID(provider);
+                String sourceKey = readInfoKey(provider);
+                if (sourceId == null) sourceId = readLootrInventorySourceId(lootrContainer);
+                if (sourceKey == null) sourceKey = readLootrInventorySourceKey(lootrContainer);
+                return new LootrTarget(lootrOwner.getUUID(), sourceId, sourceKey, lootrContainer);
+            }
+        } catch (ReflectiveOperationException | LinkageError exception) {
+            ALConstants.logDebug("Unable to inspect active Lootr loot filler state", exception);
+        }
+
+        return null;
+    }
+
+    private static boolean isTargetLootrChestMenu(AbstractContainerMenu menu, LootrTarget target) {
+        if (menu instanceof ChestMenu chestMenu) {
+            Container container = chestMenu.getContainer();
+            return isLootrInventory(container) && isSameLootrTarget(container, target);
+        }
+
+        return false;
+    }
+
+    private static boolean isLootrInventory(Container container) {
+        return container.getClass().getName().equals(LOOTR_INVENTORY_CLASS);
+    }
+
+    private static boolean isSameLootrTarget(Container container, LootrTarget target) {
+        if (container == target.inventory()) return true;
+
+        UUID sourceId = readLootrInventorySourceId(container);
+        if (sourceId != null && sourceId.equals(target.sourceId())) return true;
+
+        String sourceKey = readLootrInventorySourceKey(container);
+        return sourceKey != null && sourceKey.equals(target.sourceKey());
+    }
+
+    private static @Nullable UUID readLootrInventorySourceId(Container container) {
+        try {
+            Object info = container.getClass().getMethod("getInfo").invoke(container);
+            return readInfoUUID(info);
+        } catch (ReflectiveOperationException | LinkageError exception) {
+            ALConstants.logDebug("Unable to read Lootr inventory source UUID", exception);
+            return null;
+        }
+    }
+
+    private static @Nullable String readLootrInventorySourceKey(Container container) {
+        try {
+            Object info = container.getClass().getMethod("getInfo").invoke(container);
+            return readInfoKey(info);
+        } catch (ReflectiveOperationException | LinkageError exception) {
+            ALConstants.logDebug("Unable to read Lootr inventory source key", exception);
+            return null;
+        }
+    }
+
+    private static @Nullable UUID readInfoUUID(@Nullable Object info) {
+        if (info == null) return null;
+
+        try {
+            Object value = info.getClass().getMethod("getInfoUUID").invoke(info);
+            return value instanceof UUID uuid ? uuid : null;
+        } catch (ReflectiveOperationException | LinkageError exception) {
+            ALConstants.logDebug("Unable to read Lootr info UUID", exception);
+            return null;
+        }
+    }
+
+    private static @Nullable String readInfoKey(@Nullable Object info) {
+        if (info == null) return null;
+
+        try {
+            Object value = info.getClass().getMethod("getInfoKey").invoke(info);
+            return value instanceof String key ? key : null;
+        } catch (ReflectiveOperationException | LinkageError exception) {
+            ALConstants.logDebug("Unable to read Lootr info key", exception);
+            return null;
+        }
     }
 
     /**
