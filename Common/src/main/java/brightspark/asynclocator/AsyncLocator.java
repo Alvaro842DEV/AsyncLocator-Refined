@@ -19,8 +19,9 @@ import net.minecraft.world.level.chunk.ChunkGenerator;
 import net.minecraft.world.level.levelgen.structure.Structure;
 
 public class AsyncLocator {
-    private static volatile ExecutorService LOCATING_EXECUTOR_SERVICE = null;
-    private static final AtomicInteger POOL_COUNTER = new AtomicInteger(1);
+    private static ExecutorService LOCATING_EXECUTOR_SERVICE = null;
+    private static boolean EXECUTOR_STOPPED = false;
+    private static final AtomicInteger THREAD_COUNTER = new AtomicInteger(1);
 
     private AsyncLocator() {}
 
@@ -33,11 +34,12 @@ public class AsyncLocator {
     public static void setupExecutorService() {
         synchronized (AsyncLocator.class) {
             shutdownExecutorService();
+            EXECUTOR_STOPPED = false;
 
             ALConstants.logInfo("Starting locating executor service with virtual threads (Java 21+)");
 
             LOCATING_EXECUTOR_SERVICE = Executors.newThreadPerTaskExecutor(Thread.ofVirtual()
-                    .name(ALConstants.MOD_ID + "-", POOL_COUNTER.getAndIncrement())
+                    .name(ALConstants.MOD_ID + "-", THREAD_COUNTER.getAndIncrement())
                     .uncaughtExceptionHandler(
                             (t, e) -> ALConstants.logError(e, "Uncaught exception in virtual thread {}", t.getName()))
                     .factory());
@@ -49,6 +51,7 @@ public class AsyncLocator {
         synchronized (AsyncLocator.class) {
             executor = LOCATING_EXECUTOR_SERVICE;
             LOCATING_EXECUTOR_SERVICE = null;
+            EXECUTOR_STOPPED = true;
         }
 
         if (executor == null) {
@@ -69,17 +72,29 @@ public class AsyncLocator {
     }
 
     public static boolean isExecutorActive() {
-        ExecutorService es = LOCATING_EXECUTOR_SERVICE;
-        return es != null && !es.isShutdown() && !es.isTerminated();
+        synchronized (AsyncLocator.class) {
+            return LOCATING_EXECUTOR_SERVICE != null && !LOCATING_EXECUTOR_SERVICE.isShutdown();
+        }
     }
 
-    private static ExecutorService getOrCreateExecutor() {
+    private static Future<?> submitTask(CompletableFuture<?> completableFuture, Runnable task) {
         synchronized (AsyncLocator.class) {
             if (LOCATING_EXECUTOR_SERVICE == null || LOCATING_EXECUTOR_SERVICE.isShutdown()) {
-                ALConstants.logWarn("Locating executor service not initialized or not active: creating lazily");
+                if (EXECUTOR_STOPPED) {
+                    ALConstants.logWarn("Locating executor service has been shut down - rejecting locate task");
+                    completableFuture.completeExceptionally(
+                            new RejectedExecutionException("Async locator executor service has been shut down"));
+                    return CompletableFuture.completedFuture(null);
+                }
+                ALConstants.logWarn("Locating executor service not initialized yet: creating lazily");
                 setupExecutorService();
             }
-            return LOCATING_EXECUTOR_SERVICE;
+            try {
+                return LOCATING_EXECUTOR_SERVICE.submit(task);
+            } catch (RejectedExecutionException e) {
+                completableFuture.completeExceptionally(e);
+                return CompletableFuture.completedFuture(null);
+            }
         }
     }
 
@@ -96,10 +111,9 @@ public class AsyncLocator {
         ALConstants.logDebug(
                 "Creating locate task for {} in {} around {} within {} chunks", structureTag, level, pos, searchRadius);
 
-        ExecutorService executor = getOrCreateExecutor();
-
         CompletableFuture<BlockPos> completableFuture = new CompletableFuture<>();
-        Future<?> future = executor.submit(
+        Future<?> future = submitTask(
+                completableFuture,
                 () -> doLocateLevel(completableFuture, level, structureTag, pos, searchRadius, skipKnownStructures));
         return new LocateTask<>(level.getServer(), completableFuture, future);
     }
@@ -118,11 +132,11 @@ public class AsyncLocator {
         ALConstants.logDebug(
                 "Creating locate task for {} in {} around {} within {} chunks", structureSet, level, pos, searchRadius);
 
-        ExecutorService executor = getOrCreateExecutor();
-
         CompletableFuture<Pair<BlockPos, Holder<Structure>>> completableFuture = new CompletableFuture<>();
-        Future<?> future = executor.submit(() ->
-                doLocateChunkGenerator(completableFuture, level, structureSet, pos, searchRadius, skipKnownStructures));
+        Future<?> future = submitTask(
+                completableFuture,
+                () -> doLocateChunkGenerator(
+                        completableFuture, level, structureSet, pos, searchRadius, skipKnownStructures));
         return new LocateTask<>(level.getServer(), completableFuture, future);
     }
 
@@ -199,11 +213,11 @@ public class AsyncLocator {
                 pos,
                 searchRadius);
 
-        ExecutorService executor = getOrCreateExecutor();
-
         CompletableFuture<Pair<BlockPos, Holder<Biome>>> completableFuture = new CompletableFuture<>();
-        Future<?> future = executor.submit(() ->
-                doLocateBiome(completableFuture, level, biomeResult, pos, searchRadius, horizontalStep, verticalStep));
+        Future<?> future = submitTask(
+                completableFuture,
+                () -> doLocateBiome(
+                        completableFuture, level, biomeResult, pos, searchRadius, horizontalStep, verticalStep));
         return new LocateTask<>(level.getServer(), completableFuture, future);
     }
 
