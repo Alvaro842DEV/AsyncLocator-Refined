@@ -16,6 +16,7 @@ import net.minecraft.tags.TagKey;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.npc.AbstractVillager;
 import net.minecraft.world.entity.npc.Villager;
+import net.minecraft.world.inventory.MerchantMenu;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.trading.ItemCost;
@@ -69,7 +70,12 @@ public class MerchantLogic {
             CommonLogic.finalizeMap(mapStack, level, pos, 2, destinationTypeHolder, nameComponent);
         }
 
-        if (merchant.getTradingPlayer() instanceof ServerPlayer tradingPlayer) {
+        sendOffersToTradingPlayer(merchant);
+    }
+
+    public static void sendOffersToTradingPlayer(AbstractVillager merchant) {
+        if (merchant.getTradingPlayer() instanceof ServerPlayer tradingPlayer
+                && tradingPlayer.containerMenu instanceof MerchantMenu) {
             ALConstants.logInfo("Player {} currently trading - updating merchant offers", tradingPlayer);
 
             int villagerLevel = merchant instanceof Villager villager

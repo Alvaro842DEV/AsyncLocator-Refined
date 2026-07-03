@@ -16,6 +16,7 @@
     "SetNameFunctionAccessor",
     "SetNameFunctionMixin",
     "SlotMixin",
+    "StructureCheckMixin",
     "TreasureMapForEmeraldsMixin"
   ],
   "client": [],
