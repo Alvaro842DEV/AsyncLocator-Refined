@@ -102,8 +102,13 @@ public class MerchantLogic {
         return updateMapAsyncInternal(
                 pTrader, emeraldCost, maxUses, villagerXp, (level, merchant, mapStack) -> AsyncLocator.locate(
                                 level, destination, merchant.blockPosition(), 100, true)
-                        .thenOnServerThread(pos -> handleLocationFound(
-                                level, merchant, mapStack, displayNameKey, destinationTypeHolder, pos)));
+                        .handleOnServerThread((pos, throwable) -> {
+                            if (throwable != null) {
+                                ALConstants.logError(throwable, "Merchant map locate failed: invalidating offer");
+                                pos = null;
+                            }
+                            handleLocationFound(level, merchant, mapStack, displayNameKey, destinationTypeHolder, pos);
+                        }));
     }
 
     public static MerchantOffer updateMapAsync(
@@ -117,8 +122,11 @@ public class MerchantLogic {
         return updateMapAsyncInternal(
                 pTrader, emeraldCost, maxUses, villagerXp, (level, merchant, mapStack) -> AsyncLocator.locate(
                                 level, structureSet, merchant.blockPosition(), 100, true)
-                        .thenOnServerThread(pair -> {
-                            BlockPos pos = pair != null ? pair.getFirst() : null;
+                        .handleOnServerThread((pair, throwable) -> {
+                            if (throwable != null) {
+                                ALConstants.logError(throwable, "Merchant map locate failed: invalidating offer");
+                            }
+                            BlockPos pos = throwable == null && pair != null ? pair.getFirst() : null;
                             handleLocationFound(level, merchant, mapStack, displayNameKey, destinationTypeHolder, pos);
                         }));
     }
