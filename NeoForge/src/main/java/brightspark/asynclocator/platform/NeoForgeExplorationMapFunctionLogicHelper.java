@@ -10,6 +10,7 @@ import net.minecraft.core.Holder;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.Container;
+import net.minecraft.world.Containers;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.entity.BlockEntity;
@@ -30,7 +31,7 @@ public class NeoForgeExplorationMapFunctionLogicHelper implements ExplorationMap
             } else {
                 ItemStack extracted = handler.extractItem(slot, mapStack.getCount(), false);
                 if (!extracted.isEmpty()) {
-                    handler.insertItem(slot, new ItemStack(Items.MAP), false);
+                    dropIfNotEmpty(level, invPos, handler.insertItem(slot, new ItemStack(Items.MAP), false));
                 }
             }
         });
@@ -61,13 +62,20 @@ public class NeoForgeExplorationMapFunctionLogicHelper implements ExplorationMap
                 modifiableHandler.setStackInSlot(slot, actualStack);
             } else {
                 handler.extractItem(slot, actualStack.getCount(), false);
-                handler.insertItem(slot, actualStack, false);
+                dropIfNotEmpty(level, invPos, handler.insertItem(slot, actualStack, false));
             }
         });
         if (!updated) {
             ALConstants.logDebug(
                     "NeoForge updateMap fallback: no container/slot match. Finalizing pending map in-place.");
             CommonLogic.finalizeMap(mapStack, level, pos, scale, destinationTypeHolder, displayName);
+        }
+    }
+
+    private static void dropIfNotEmpty(ServerLevel level, BlockPos pos, ItemStack remainder) {
+        if (!remainder.isEmpty()) {
+            ALConstants.logWarn("Container at {} rejected the updated map: dropping it in the world instead", pos);
+            Containers.dropItemStack(level, pos.getX(), pos.getY() + 1.0, pos.getZ(), remainder);
         }
     }
 
