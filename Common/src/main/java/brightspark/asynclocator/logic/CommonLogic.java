@@ -2,7 +2,11 @@ package brightspark.asynclocator.logic;
 
 import brightspark.asynclocator.ALConstants;
 import brightspark.asynclocator.platform.Services;
+import java.lang.reflect.Method;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
 import net.minecraft.core.component.DataComponents;
@@ -33,6 +37,8 @@ public class CommonLogic {
     private static final String LOOTR_INVENTORY_CLASS = "noobanidus.mods.lootr.common.data.LootrInventory";
     private static final String LOOTR_DEFAULT_LOOT_FILLER_CLASS =
             "noobanidus.mods.lootr.common.api.data.DefaultLootFiller";
+    private static final ConcurrentMap<LootrMethodKey, Method> LOOTR_METHOD_CACHE = new ConcurrentHashMap<>();
+    private static final AtomicBoolean LOOTR_FAILURE_WARNED = new AtomicBoolean();
 
     private CommonLogic() {}
 
@@ -310,16 +316,15 @@ public class CommonLogic {
         if (!Services.PLATFORM.isModLoaded("lootr")) return null;
 
         try {
-            Class<?> fillerClass = Class.forName(LOOTR_DEFAULT_LOOT_FILLER_CLASS);
-            Object state = fillerClass.getMethod("getFillerState").invoke(null);
+            Object state = invokeLootrStatic(LOOTR_DEFAULT_LOOT_FILLER_CLASS, "getFillerState");
             if (state == null) return null;
 
-            Object container = state.getClass().getMethod("container").invoke(state);
-            Object player = state.getClass().getMethod("player").invoke(state);
+            Object container = invokeLootr(state, "container");
+            Object player = invokeLootr(state, "player");
             if (container instanceof Container lootrContainer
                     && isLootrInventory(lootrContainer)
                     && player instanceof Player lootrOwner) {
-                Object provider = state.getClass().getMethod("provider").invoke(state);
+                Object provider = invokeLootr(state, "provider");
                 UUID sourceId = readInfoUUID(provider);
                 String sourceKey = readInfoKey(provider);
                 if (sourceId == null) sourceId = readLootrInventorySourceId(lootrContainer);
@@ -327,11 +332,40 @@ public class CommonLogic {
                 return new LootrTarget(lootrOwner.getUUID(), sourceId, sourceKey, lootrContainer);
             }
         } catch (ReflectiveOperationException | LinkageError exception) {
-            ALConstants.logDebug("Unable to inspect active Lootr loot filler state", exception);
+            if (LOOTR_FAILURE_WARNED.compareAndSet(false, true)) {
+                ALConstants.logWarn(
+                        "Lootr is installed but its loot filler state could not be inspected - Lootr chest maps"
+                                + " will resolve without Lootr integration. This usually means an incompatible"
+                                + " Lootr version.",
+                        exception);
+            } else {
+                ALConstants.logDebug("Unable to inspect active Lootr loot filler state", exception);
+            }
         }
 
         return null;
     }
+
+    private static @Nullable Object invokeLootr(@Nullable Object target, String methodName)
+            throws ReflectiveOperationException {
+        if (target == null) return null;
+        return lootrMethod(target.getClass(), methodName).invoke(target);
+    }
+
+    private static @Nullable Object invokeLootrStatic(String className, String methodName)
+            throws ReflectiveOperationException {
+        return lootrMethod(Class.forName(className), methodName).invoke(null);
+    }
+
+    private static Method lootrMethod(Class<?> owner, String methodName) throws NoSuchMethodException {
+        Method cached = LOOTR_METHOD_CACHE.get(new LootrMethodKey(owner, methodName));
+        if (cached != null) return cached;
+        Method resolved = owner.getMethod(methodName);
+        LOOTR_METHOD_CACHE.putIfAbsent(new LootrMethodKey(owner, methodName), resolved);
+        return resolved;
+    }
+
+    private record LootrMethodKey(Class<?> owner, String name) {}
 
     private static boolean isTargetLootrChestMenu(AbstractContainerMenu menu, LootrTarget target) {
         if (menu instanceof ChestMenu chestMenu) {
@@ -358,8 +392,7 @@ public class CommonLogic {
 
     private static @Nullable UUID readLootrInventorySourceId(Container container) {
         try {
-            Object info = container.getClass().getMethod("getInfo").invoke(container);
-            return readInfoUUID(info);
+            return readInfoUUID(invokeLootr(container, "getInfo"));
         } catch (ReflectiveOperationException | LinkageError exception) {
             ALConstants.logDebug("Unable to read Lootr inventory source UUID", exception);
             return null;
@@ -368,8 +401,7 @@ public class CommonLogic {
 
     private static @Nullable String readLootrInventorySourceKey(Container container) {
         try {
-            Object info = container.getClass().getMethod("getInfo").invoke(container);
-            return readInfoKey(info);
+            return readInfoKey(invokeLootr(container, "getInfo"));
         } catch (ReflectiveOperationException | LinkageError exception) {
             ALConstants.logDebug("Unable to read Lootr inventory source key", exception);
             return null;
@@ -380,7 +412,7 @@ public class CommonLogic {
         if (info == null) return null;
 
         try {
-            Object value = info.getClass().getMethod("getInfoUUID").invoke(info);
+            Object value = invokeLootr(info, "getInfoUUID");
             return value instanceof UUID uuid ? uuid : null;
         } catch (ReflectiveOperationException | LinkageError exception) {
             ALConstants.logDebug("Unable to read Lootr info UUID", exception);
@@ -392,7 +424,7 @@ public class CommonLogic {
         if (info == null) return null;
 
         try {
-            Object value = info.getClass().getMethod("getInfoKey").invoke(info);
+            Object value = invokeLootr(info, "getInfoKey");
             return value instanceof String key ? key : null;
         } catch (ReflectiveOperationException | LinkageError exception) {
             ALConstants.logDebug("Unable to read Lootr info key", exception);
