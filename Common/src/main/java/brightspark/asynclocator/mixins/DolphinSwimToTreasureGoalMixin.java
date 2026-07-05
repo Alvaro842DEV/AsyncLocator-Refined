@@ -4,18 +4,16 @@ import brightspark.asynclocator.ALConstants;
 import brightspark.asynclocator.AsyncLocator;
 import brightspark.asynclocator.AsyncLocator.LocateTask;
 import brightspark.asynclocator.platform.Services;
-import java.util.Optional;
+import java.util.concurrent.CancellationException;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.HolderSet;
-import net.minecraft.core.Registry;
-import net.minecraft.core.registries.Registries;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.StructureTags;
 import net.minecraft.world.entity.animal.Dolphin;
-import net.minecraft.world.level.levelgen.structure.Structure;
+import org.jetbrains.annotations.Nullable;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.Redirect;
@@ -24,7 +22,8 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 @Mixin(targets = "net.minecraft.world.entity.animal.Dolphin$DolphinSwimToTreasureGoal", priority = 800)
 public class DolphinSwimToTreasureGoalMixin {
-    private LocateTask<?> locateTask = null;
+    @Unique
+    private LocateTask<BlockPos> locateTask = null;
 
     @Shadow
     @Final
@@ -77,7 +76,6 @@ public class DolphinSwimToTreasureGoalMixin {
             locateTask.cancel();
             locateTask = null;
         }
-        ((DolphinAccessor) (Object) this.dolphin).asynclocator$setTreasurePos(null);
     }
 
     /*
@@ -91,28 +89,28 @@ public class DolphinSwimToTreasureGoalMixin {
         }
     }
 
+    /*
+     * Uses the vanilla TagKey overload, which resolves DOLPHIN_LOCATED through the same
+     * ChunkGenerator search as a manual lookup would.
+     */
+    @Unique
     private void handleFindTreasureAsync(ServerLevel level, BlockPos origin) {
-        try {
-            Registry<Structure> registry = level.registryAccess().lookupOrThrow(Registries.STRUCTURE);
-            Optional<HolderSet.Named<Structure>> holderSetOpt = registry.get(StructureTags.DOLPHIN_LOCATED);
-            if (holderSetOpt.isPresent()) {
-                HolderSet<Structure> set = holderSetOpt.get();
-                locateTask = AsyncLocator.locate(level, set, origin, 50, false)
-                        .thenOnServerThread(pair -> handleLocationFound(level, pair == null ? null : pair.getFirst()));
-                return;
-            } else {
-                ALConstants.logWarn(
-                        "DOLPHIN_LOCATED tag not found; falling back to ServerLevel.findNearestMapStructure path");
-            }
-        } catch (Throwable t) {
-            ALConstants.logError(t, "Failed to resolve HolderSet for DOLPHIN_LOCATED");
-        }
-
         locateTask = AsyncLocator.locate(level, StructureTags.DOLPHIN_LOCATED, origin, 50, false)
-                .thenOnServerThread(pos -> handleLocationFound(level, pos));
+                .handleOnServerThread((pos, throwable) -> {
+                    if (throwable instanceof CancellationException) {
+                        ALConstants.logDebug("Dolphin treasure locate task cancelled");
+                        return;
+                    }
+                    if (throwable != null) {
+                        ALConstants.logError(throwable, "Dolphin treasure locate failed");
+                        pos = null;
+                    }
+                    handleLocationFound(level, pos);
+                });
     }
 
-    private void handleLocationFound(ServerLevel level, BlockPos pos) {
+    @Unique
+    private void handleLocationFound(ServerLevel level, @Nullable BlockPos pos) {
         locateTask = null;
         if (pos != null) {
             ((DolphinAccessor) (Object) this.dolphin).asynclocator$setTreasurePos(pos);
@@ -120,6 +118,8 @@ public class DolphinSwimToTreasureGoalMixin {
             level.broadcastEntityEvent(this.dolphin, (byte) 38);
             ALConstants.logInfo("Location found at {} - dolphin will now swim to treasure", pos);
         } else {
+            // Mirror vanilla start()'s not-found branch so canContinueToUse() or stop() behave as vanilla
+            ((DolphinSwimToTreasureGoalStuckAccessor) (Object) this).asynclocator$setStuck(true);
             ALConstants.logInfo("No location found - dolphin will continue normal behavior");
         }
     }
