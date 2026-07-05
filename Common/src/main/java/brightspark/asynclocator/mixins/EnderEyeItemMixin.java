@@ -3,11 +3,8 @@ package brightspark.asynclocator.mixins;
 import brightspark.asynclocator.ALConstants;
 import brightspark.asynclocator.logic.EnderEyeItemLogic;
 import brightspark.asynclocator.platform.Services;
-import com.mojang.datafixers.util.Pair;
 import net.minecraft.advancements.critereon.UsedEnderEyeTrigger;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.Holder;
-import net.minecraft.core.HolderSet;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.stats.Stat;
@@ -19,7 +16,6 @@ import net.minecraft.world.entity.projectile.EyeOfEnder;
 import net.minecraft.world.item.EnderEyeItem;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
-import net.minecraft.world.level.chunk.ChunkGenerator;
 import net.minecraft.world.level.levelgen.structure.Structure;
 import net.minecraft.world.phys.BlockHitResult;
 import org.spongepowered.asm.mixin.Mixin;
@@ -55,27 +51,6 @@ public class EnderEyeItemMixin {
             // Normal behaviour
             return serverlevel.findNearestMapStructure(pStructureTag, pPos, pRadius, pSkipExistingChunks);
         }
-    }
-
-    @Redirect(
-            method = "use",
-            at =
-                    @At(
-                            value = "INVOKE",
-                            target =
-                                    "Lnet/minecraft/world/level/chunk/ChunkGenerator;findNearestMapStructure(Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/core/HolderSet;Lnet/minecraft/core/BlockPos;IZ)Lcom/mojang/datafixers/util/Pair;"))
-    public Pair<BlockPos, Holder<Structure>> generatorFindNearestMapFeature(
-            ChunkGenerator generator,
-            ServerLevel level,
-            HolderSet<Structure> set,
-            BlockPos origin,
-            int radius,
-            boolean skipExisting) {
-        if (Services.CONFIG.eyeOfEnderEnabled()) {
-            ALConstants.logDebug("Intercepted EnderEyeItem#use ChunkGenerator.findNearestMapStructure");
-            return null;
-        }
-        return generator.findNearestMapStructure(level, set, origin, radius, skipExisting);
     }
 
     // Start the async locate task here so we have the eye of ender entity for context

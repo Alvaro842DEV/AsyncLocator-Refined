@@ -2,154 +2,99 @@ package brightspark.asynclocator.logic;
 
 import brightspark.asynclocator.ALConstants;
 import brightspark.asynclocator.AsyncLocator;
+import brightspark.asynclocator.AsyncLocator.LocateTask;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import net.minecraft.advancements.CriteriaTriggers;
-import net.minecraft.core.HolderSet;
-import net.minecraft.core.Registry;
-import net.minecraft.core.registries.Registries;
+import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.stats.Stats;
 import net.minecraft.tags.StructureTags;
+import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.projectile.EyeOfEnder;
 import net.minecraft.world.item.EnderEyeItem;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import org.jetbrains.annotations.Nullable;
 
 public class EnderEyeItemLogic {
+    private static final long LOCATE_TIMEOUT_SECONDS = 60L;
+
     private EnderEyeItemLogic() {}
 
+    /*
+     * Uses the vanilla TagKey overload, which resolves EYE_OF_ENDER_LOCATED through the same
+     * ChunkGenerator search as a manual HolderSet lookup would, so structure overhaul mods
+     * (e.g. YUNG's, Dungeons and Taverns...) are supported identically.
+     */
     public static void locateAsync(ServerLevel level, Player player, EyeOfEnder eyeOfEnder, EnderEyeItem enderEyeItem) {
-        final long timeoutSeconds = 60L;
+        ((EyeOfEnderData) eyeOfEnder).setLocateTaskOngoing(true);
 
-        /*
-         * Locate with ChunkGenerator using HolderSet(StructureTags.EYE_OF_ENDER_LOCATED) for better compatibility
-         * with structure overhaul mods (e.g., YUNG's, Dungeons and Taverns...)
-         */
-        try {
-            Registry<net.minecraft.world.level.levelgen.structure.Structure> registry =
-                    level.registryAccess().lookupOrThrow(Registries.STRUCTURE);
-            java.util.Optional<HolderSet.Named<net.minecraft.world.level.levelgen.structure.Structure>> optionalSet =
-                    registry.get(StructureTags.EYE_OF_ENDER_LOCATED);
-            if (optionalSet.isPresent()) {
-                HolderSet<net.minecraft.world.level.levelgen.structure.Structure> holderSet = optionalSet.get();
+        LocateTask<BlockPos> locateTask =
+                AsyncLocator.locate(level, StructureTags.EYE_OF_ENDER_LOCATED, player.blockPosition(), 100, false);
+        locateTask
+                .completableFuture()
+                .orTimeout(LOCATE_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+                .whenComplete((pos, throwable) -> locateTask
+                        .server()
+                        .submit(() -> handleLocateResult(
+                                level, player, eyeOfEnder, enderEyeItem, locateTask, pos, throwable)));
+    }
 
-                ((EyeOfEnderData) eyeOfEnder).setLocateTaskOngoing(true);
+    private static void handleLocateResult(
+            ServerLevel level,
+            Player player,
+            EyeOfEnder eyeOfEnder,
+            EnderEyeItem enderEyeItem,
+            LocateTask<BlockPos> locateTask,
+            @Nullable BlockPos pos,
+            @Nullable Throwable throwable) {
+        ((EyeOfEnderData) eyeOfEnder).setLocateTaskOngoing(false);
 
-                var locateTask = AsyncLocator.locate(level, holderSet, player.blockPosition(), 100, false);
-                var timed =
-                        locateTask.completableFuture().orTimeout(timeoutSeconds, java.util.concurrent.TimeUnit.SECONDS);
-                timed.whenComplete((pair, throwable) -> locateTask.server().submit(() -> {
-                    ((EyeOfEnderData) eyeOfEnder).setLocateTaskOngoing(false);
-
-                    // Entity may have been removed/unloaded while we were locating
-                    if (!eyeOfEnder.isAlive() || eyeOfEnder.isRemoved()) {
-                        ALConstants.logDebug("EyeOfEnder no longer alive when locate result arrived");
-                        return;
-                    }
-
-                    if (throwable instanceof java.util.concurrent.TimeoutException) {
-                        ALConstants.logWarn(
-                                "EyeOfEnder locate timed out after {}s, dropping item and removing entity",
-                                timeoutSeconds);
-                        try {
-                            locateTask.cancel();
-                        } catch (Throwable ignore) {
-                        }
-                        net.minecraft.world.entity.item.ItemEntity drop =
-                                new net.minecraft.world.entity.item.ItemEntity(
-                                        level,
-                                        eyeOfEnder.getX(),
-                                        eyeOfEnder.getY(),
-                                        eyeOfEnder.getZ(),
-                                        new net.minecraft.world.item.ItemStack(
-                                                net.minecraft.world.item.Items.ENDER_EYE));
-                        level.addFreshEntity(drop);
-                        eyeOfEnder.discard();
-                        return;
-                    } else if (throwable != null) {
-                        ALConstants.logError(throwable, "Exception while locating using HolderSet for EyeOfEnder");
-                        ALConstants.logInfo("No location found - removing eye of ender entity");
-                        eyeOfEnder.discard();
-                        return;
-                    }
-
-                    if (pair != null) {
-                        ALConstants.logInfo(
-                                "Location found - updating eye of ender entity (structure: {})",
-                                pair.getSecond().value().getClass().getSimpleName());
-                        try {
-                            eyeOfEnder.signalTo(pair.getFirst());
-                        } catch (Throwable t) {
-                            ALConstants.logError(t, "Failed to signal EyeOfEnder to position {}", pair.getFirst());
-                        }
-                        if (player instanceof ServerPlayer sp) {
-                            CriteriaTriggers.USED_ENDER_EYE.trigger(sp, pair.getFirst());
-                        }
-                        player.awardStat(Stats.ITEM_USED.get(enderEyeItem));
-                    } else {
-                        ALConstants.logInfo("No location found - removing eye of ender entity");
-                        eyeOfEnder.discard();
-                    }
-                }));
-                return;
-            } else {
-                ALConstants.logWarn("EYE_OF_ENDER_LOCATED tag not found in structure registry");
-            }
-        } catch (Throwable t) {
-            ALConstants.logError(t, "Failed to resolve HolderSet for EYE_OF_ENDER_LOCATED");
+        // Entity may have been removed/unloaded while we were locating
+        if (!eyeOfEnder.isAlive() || eyeOfEnder.isRemoved()) {
+            ALConstants.logDebug("EyeOfEnder no longer alive when locate result arrived");
+            return;
         }
 
-        // fallback
-        ((EyeOfEnderData) eyeOfEnder).setLocateTaskOngoing(true);
-        var locateTask =
-                AsyncLocator.locate(level, StructureTags.EYE_OF_ENDER_LOCATED, player.blockPosition(), 100, false);
-        var timed = locateTask.completableFuture().orTimeout(timeoutSeconds, java.util.concurrent.TimeUnit.SECONDS);
-        timed.whenComplete((pos, throwable) -> locateTask.server().submit(() -> {
-            ((EyeOfEnderData) eyeOfEnder).setLocateTaskOngoing(false);
+        if (throwable instanceof TimeoutException) {
+            ALConstants.logWarn(
+                    "EyeOfEnder locate timed out after {}s, refunding item and removing entity",
+                    LOCATE_TIMEOUT_SECONDS);
+            locateTask.cancel();
+            refundAndDiscard(level, player, eyeOfEnder);
+            return;
+        }
+        if (throwable != null) {
+            ALConstants.logError(throwable, "Exception while locating structure for EyeOfEnder");
+            refundAndDiscard(level, player, eyeOfEnder);
+            return;
+        }
+        if (pos == null) {
+            ALConstants.logInfo("No location found - refunding item and removing eye of ender entity");
+            refundAndDiscard(level, player, eyeOfEnder);
+            return;
+        }
 
-            // Entity may have been removed/unloaded while we were locating
-            if (!eyeOfEnder.isAlive() || eyeOfEnder.isRemoved()) {
-                ALConstants.logDebug("EyeOfEnder no longer alive when locate result arrived");
-                return;
-            }
+        ALConstants.logInfo("Location found - updating eye of ender entity");
+        eyeOfEnder.signalTo(pos);
+        if (player instanceof ServerPlayer serverPlayer) {
+            CriteriaTriggers.USED_ENDER_EYE.trigger(serverPlayer, pos);
+        }
+        player.awardStat(Stats.ITEM_USED.get(enderEyeItem));
+    }
 
-            if (throwable instanceof java.util.concurrent.TimeoutException) {
-                ALConstants.logWarn(
-                        "EyeOfEnder locate timed out after {}s, dropping item and removing entity", timeoutSeconds);
-                try {
-                    locateTask.cancel();
-                } catch (Throwable ignore) {
-                }
-                net.minecraft.world.entity.item.ItemEntity drop = new net.minecraft.world.entity.item.ItemEntity(
-                        level,
-                        eyeOfEnder.getX(),
-                        eyeOfEnder.getY(),
-                        eyeOfEnder.getZ(),
-                        new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.ENDER_EYE));
-                level.addFreshEntity(drop);
-                eyeOfEnder.discard();
-                return;
-            } else if (throwable != null) {
-                ALConstants.logError(throwable, "Exception while locating using TagKey for EyeOfEnder");
-                ALConstants.logInfo("No location found - removing eye of ender entity");
-                eyeOfEnder.discard();
-                return;
-            }
-
-            if (pos != null) {
-                ALConstants.logInfo("Location found - updating eye of ender entity");
-                try {
-                    eyeOfEnder.signalTo(pos);
-                } catch (Throwable t2) {
-                    ALConstants.logError(t2, "Failed to signal EyeOfEnder to position {}", pos);
-                }
-                if (player instanceof ServerPlayer sp) {
-                    CriteriaTriggers.USED_ENDER_EYE.trigger(sp, pos);
-                }
-                player.awardStat(Stats.ITEM_USED.get(enderEyeItem));
-            } else {
-                ALConstants.logInfo("No location found - removing eye of ender entity");
-                eyeOfEnder.discard();
-            }
-        }));
+    /*
+     * Vanilla only consumes the ender eye once a location was found, but by the time the async
+     * result arrives the item has already been consumed, so give it back on any failure
+     */
+    private static void refundAndDiscard(ServerLevel level, Player player, EyeOfEnder eyeOfEnder) {
+        if (!player.hasInfiniteMaterials()) {
+            level.addFreshEntity(new ItemEntity(
+                    level, eyeOfEnder.getX(), eyeOfEnder.getY(), eyeOfEnder.getZ(), new ItemStack(Items.ENDER_EYE)));
+        }
+        eyeOfEnder.discard();
     }
 }
