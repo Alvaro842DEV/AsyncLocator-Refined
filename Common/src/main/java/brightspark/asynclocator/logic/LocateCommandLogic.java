@@ -5,15 +5,14 @@ import brightspark.asynclocator.AsyncLocator;
 import brightspark.asynclocator.mixins.LocateCommandAccess;
 import brightspark.asynclocator.platform.Services;
 import com.google.common.base.Stopwatch;
-import com.mojang.datafixers.util.Pair;
 import net.minecraft.Util;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.arguments.ResourceOrTagArgument;
 import net.minecraft.commands.arguments.ResourceOrTagKeyArgument;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.Holder;
 import net.minecraft.core.HolderSet;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.ComponentUtils;
 import net.minecraft.server.commands.LocateCommand;
 import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.levelgen.structure.Structure;
@@ -32,9 +31,14 @@ public class LocateCommandLogic {
         BlockPos originPos = BlockPos.containing(sourceStack.getPosition());
         Stopwatch stopwatch = Stopwatch.createStarted(Util.TICKER);
         AsyncLocator.locate(sourceStack.getLevel(), holderset, originPos, 100, false)
-                .thenOnServerThread(pair -> {
+                .handleOnServerThread((pair, throwable) -> {
                     stopwatch.stop();
-                    if (pair != null) {
+                    if (throwable != null) {
+                        ALConstants.logError(
+                                throwable, "/locate structure failed for {}", structureResult.asPrintable());
+                        sourceStack.sendFailure(Component.literal(
+                                "An unexpected error occurred while locating " + structureResult.asPrintable()));
+                    } else if (pair != null) {
                         ALConstants.logInfo("Location found - sending success back to command source");
                         LocateCommand.showLocateResult(
                                 sourceStack,
@@ -46,9 +50,10 @@ public class LocateCommandLogic {
                                 stopwatch.elapsed());
                     } else {
                         ALConstants.logInfo("No location found - sending failure back to command source");
-                        sourceStack.sendFailure(Component.literal(LocateCommandAccess.getErrorFailed()
+                        // Send the raw message so the client translates it, like vanilla's thrown exception
+                        sourceStack.sendFailure(ComponentUtils.fromMessage(LocateCommandAccess.getErrorFailed()
                                 .create(structureResult.asPrintable())
-                                .getMessage()));
+                                .getRawMessage()));
                     }
                 });
     }
@@ -67,9 +72,13 @@ public class LocateCommandLogic {
                         radius,
                         BIOME_SAMPLE_RESOLUTION_HORIZONTAL,
                         BIOME_SAMPLE_RESOLUTION_VERTICAL)
-                .thenOnServerThread((Pair<BlockPos, Holder<Biome>> pair) -> {
+                .handleOnServerThread((pair, throwable) -> {
                     stopwatch.stop();
-                    if (pair != null) {
+                    if (throwable != null) {
+                        ALConstants.logError(throwable, "/locate biome failed for {}", biomeResult.asPrintable());
+                        sourceStack.sendFailure(Component.literal(
+                                "An unexpected error occurred while locating " + biomeResult.asPrintable()));
+                    } else if (pair != null) {
                         ALConstants.logInfo("Biome found - sending success back to command source");
                         LocateCommand.showLocateResult(
                                 sourceStack,
@@ -81,9 +90,10 @@ public class LocateCommandLogic {
                                 stopwatch.elapsed());
                     } else {
                         ALConstants.logInfo("Biome not found - sending failure back to command source");
-                        sourceStack.sendFailure(Component.literal(LocateCommandAccess.getErrorBiomeNotFound()
+                        // Send the raw message so the client translates it, like vanilla's thrown exception
+                        sourceStack.sendFailure(ComponentUtils.fromMessage(LocateCommandAccess.getErrorBiomeNotFound()
                                 .create(biomeResult.asPrintable())
-                                .getMessage()));
+                                .getRawMessage()));
                     }
                 });
     }
