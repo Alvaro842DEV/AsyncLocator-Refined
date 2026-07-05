@@ -29,9 +29,6 @@ public class AsyncLocatorModNeoForge {
                 ALConstants.logInfo("Config reloaded");
                 AsyncLocatorConfigNeoForge.validateConfig();
                 AsyncLocatorModCommon.printConfigs();
-                if (AsyncLocator.isExecutorActive()) {
-                    AsyncLocator.setupExecutorService();
-                }
             }
         });
 
