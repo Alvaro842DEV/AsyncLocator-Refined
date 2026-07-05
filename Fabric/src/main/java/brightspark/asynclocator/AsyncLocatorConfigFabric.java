@@ -104,28 +104,17 @@ public class AsyncLocatorConfigFabric {
                     }
                 }
 
-            } catch (IllegalStateException e) {
-                if (e.getMessage().contains("greater than the maximum")
-                        || e.getMessage().contains("less than the minimum")) {
-                    ALConstants.logError(
-                            "Invalid config value detected: {}. Resetting to defaults and recreating config.",
-                            e.getMessage());
-                    resetToDefaults();
-
-                    // Rewrite config with defaults
-                    try {
-                        SparkConfig.write(configFile, AsyncLocatorConfigFabric.class);
-                        ALConstants.logInfo("Config file rewrite with default values");
-                    } catch (IOException | IllegalAccessException writeError) {
-                        ALConstants.logError(writeError, "Failed to rewrite cpnfig file");
-                    }
-                } else {
-                    ALConstants.logError(e, "Failed to read config file, using defaults");
-                    resetToDefaults();
-                }
-            } catch (IOException | IllegalAccessException e) {
-                ALConstants.logError(e, "Failed to read config file {}, using defaults", configFile);
+            } catch (IOException | IllegalAccessException | RuntimeException e) {
+                ALConstants.logError(e, "Failed to read config file {}. Resetting to defaults.", configFile);
                 resetToDefaults();
+
+                // Rewrite config with defaults
+                try {
+                    SparkConfig.write(configFile, AsyncLocatorConfigFabric.class);
+                    ALConstants.logInfo("Config file rewrite with default values");
+                } catch (IOException | IllegalAccessException writeError) {
+                    ALConstants.logError(writeError, "Failed to rewrite cpnfig file");
+                }
             }
         } else {
             ALConstants.logInfo("No config file found - creating it");
