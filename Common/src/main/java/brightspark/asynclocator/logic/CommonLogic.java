@@ -119,7 +119,7 @@ public class CommonLogic {
     // Retrieves the tracking UUID stoerd on a managed pending map
     public static @Nullable java.util.UUID getTrackingUUID(ItemStack stack) {
         CustomData customData = stack.get(DataComponents.CUSTOM_DATA);
-        if (customData == null) return null;
+        if (customData == null || !customData.contains(UUID_TRACKER)) return null;
         CompoundTag tag = customData.copyTag();
         String raw = tag.getString(UUID_TRACKER).orElse("");
         if (raw.isEmpty()) return null;
