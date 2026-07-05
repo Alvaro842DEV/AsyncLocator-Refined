@@ -4,12 +4,14 @@ import brightspark.asynclocator.ALConstants;
 import brightspark.asynclocator.logic.EyeOfEnderData;
 import net.minecraft.world.entity.projectile.EyeOfEnder;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(EyeOfEnder.class)
 public class EyeOfEnderMixin implements EyeOfEnderData {
+    @Unique
     private boolean locateTaskOngoing = false;
 
     @Override
