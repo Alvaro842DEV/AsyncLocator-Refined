@@ -6,21 +6,34 @@ import java.util.List;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
+import java.util.function.Predicate;
+import java.util.function.Supplier;
 import net.minecraft.commands.arguments.ResourceOrTagArgument;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
 import net.minecraft.core.HolderSet;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.TickTask;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.TagKey;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.chunk.ChunkGenerator;
 import net.minecraft.world.level.levelgen.structure.Structure;
 
 public class AsyncLocator {
+    /*
+     * All executor state is guarded by the AsyncLocator.class monitor so
+     * that a task submission can never race a concurrent shutdown
+     */
     private static ExecutorService LOCATING_EXECUTOR_SERVICE = null;
     private static boolean EXECUTOR_STOPPED = false;
     private static final AtomicInteger THREAD_COUNTER = new AtomicInteger(1);
+
+    private static final ConcurrentHashMap<LocateKey, CompletableFuture<?>> PENDING_LOCATES = new ConcurrentHashMap<>();
+
+    private record LocateKey(ResourceKey<Level> dimension, Object target, BlockPos pos, int searchRadius) {}
 
     private AsyncLocator() {}
 
@@ -113,7 +126,7 @@ public class AsyncLocator {
         CompletableFuture<BlockPos> completableFuture = new CompletableFuture<>();
         Future<?> future = submitTask(
                 completableFuture,
-                () -> doLocateLevel(completableFuture, level, structureTag, pos, searchRadius, skipKnownStructures));
+                () -> doLocateLevel(completableFuture, level, structureTag, pos, searchRadius, skipKnown));
         return new LocateTask<>(level.getServer(), completableFuture, future);
     }
 
@@ -198,7 +211,6 @@ public class AsyncLocator {
         }
     }
 
-    // Queues a task to locate a biome and returns a {@link LocateTask} with the futures for it.
     public static LocateTask<Pair<BlockPos, Holder<Biome>>> locateBiome(
             ServerLevel level,
             ResourceOrTagArgument.Result<Biome> biomeResult,
@@ -206,9 +218,21 @@ public class AsyncLocator {
             int searchRadius,
             int horizontalStep,
             int verticalStep) {
+        return locateBiome(
+                level, biomeResult, biomeResult.asPrintable(), pos, searchRadius, horizontalStep, verticalStep);
+    }
+
+    public static LocateTask<Pair<BlockPos, Holder<Biome>>> locateBiome(
+            ServerLevel level,
+            Predicate<Holder<Biome>> biomePredicate,
+            String printableName,
+            BlockPos pos,
+            int searchRadius,
+            int horizontalStep,
+            int verticalStep) {
         ALConstants.logDebug(
                 "Creating locate task for biomes {} in {} around {} within {} blocks",
-                biomeResult.asPrintable(),
+                printableName,
                 level,
                 pos,
                 searchRadius);
@@ -217,14 +241,22 @@ public class AsyncLocator {
         Future<?> future = submitTask(
                 completableFuture,
                 () -> doLocateBiome(
-                        completableFuture, level, biomeResult, pos, searchRadius, horizontalStep, verticalStep));
+                        completableFuture,
+                        level,
+                        biomePredicate,
+                        printableName,
+                        pos,
+                        searchRadius,
+                        horizontalStep,
+                        verticalStep));
         return new LocateTask<>(level.getServer(), completableFuture, future);
     }
 
     private static void doLocateBiome(
             CompletableFuture<Pair<BlockPos, Holder<Biome>>> completableFuture,
             ServerLevel level,
-            ResourceOrTagArgument.Result<Biome> biomeResult,
+            Predicate<Holder<Biome>> biomePredicate,
+            String printableName,
             BlockPos pos,
             int searchRadius,
             int horizontalStep,
@@ -232,20 +264,19 @@ public class AsyncLocator {
         try {
             ALConstants.logDebug(
                     "Trying to locate biomes {} in {} around {} within {} blocks",
-                    biomeResult.asPrintable(),
+                    printableName,
                     level,
                     pos,
                     searchRadius);
             long start = System.nanoTime();
 
-            // Call the vanilla method with result directly
             Pair<BlockPos, Holder<Biome>> foundPair =
-                    level.findClosestBiome3d(biomeResult, pos, searchRadius, horizontalStep, verticalStep);
+                    level.findClosestBiome3d(biomePredicate, pos, searchRadius, horizontalStep, verticalStep);
 
             String time =
                     NumberFormat.getNumberInstance().format(TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start));
             if (foundPair == null) {
-                ALConstants.logInfo("No biome from {} found (took {}ms)", biomeResult.asPrintable(), time);
+                ALConstants.logInfo("No biome from {} found (took {}ms)", printableName, time);
             } else {
                 ALConstants.logInfo(
                         "Found biome {} at {} (took {}ms)",
@@ -255,11 +286,8 @@ public class AsyncLocator {
             }
             completableFuture.complete(foundPair);
         } catch (Throwable t) {
-            ALConstants.logError(t, "Exception while locating biomes {} around {}", biomeResult.asPrintable(), pos);
-            try {
-                completableFuture.complete(null);
-            } catch (Throwable ignore) {
-            }
+            ALConstants.logError(t, "Exception while locating biomes {} around {}", printableName, pos);
+            completableFuture.completeExceptionally(t);
         }
     }
 
@@ -293,6 +321,14 @@ public class AsyncLocator {
 
         /**
          * Helper function that cancels both completableFuture and taskFuture.
+
+         * Fails this task with a {@link TimeoutException} if it
+         * does not finish within the given time
+         */
+        public LocateTask<T> withTimeout(long timeout, TimeUnit unit) {
+            completableFuture.orTimeout(timeout, unit);
+            return this;
+        }
          */
         public void cancel() {
             taskFuture.cancel(true);
