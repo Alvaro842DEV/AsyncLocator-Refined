@@ -51,6 +51,14 @@ neoForge {
             loadedMods.add(mainMod)
         }
 
+        // Run with: ./gradlew :NeoForge:runGametest
+        create("gametest") {
+            type = "gameTestServer"
+            gameDirectory.set(file("run/gametest"))
+
+            loadedMods.add(mainMod)
+        }
+
         create("data") {
             clientData()
             gameDirectory.set(file("run/data"))

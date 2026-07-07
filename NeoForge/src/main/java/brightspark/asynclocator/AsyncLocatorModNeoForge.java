@@ -1,5 +1,6 @@
 package brightspark.asynclocator;
 
+import brightspark.asynclocator.gametest.AsyncLocatorNeoForgeGameTests;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.common.Mod;
@@ -24,6 +25,8 @@ public class AsyncLocatorModNeoForge {
             }
         });
 
+        // Note: no executor rebuild here - no config value affects the executor, and restarting it
+        // would disrupt in-flight locate tasks
         modEventBus.addListener((ModConfigEvent.Reloading event) -> {
             if (event.getConfig().getSpec() == AsyncLocatorConfigNeoForge.SPEC) {
                 ALConstants.logInfo("Config reloaded");
@@ -31,6 +34,9 @@ public class AsyncLocatorModNeoForge {
                 AsyncLocatorModCommon.printConfigs();
             }
         });
+
+        modEventBus.addListener(AsyncLocatorNeoForgeGameTests::registerTestFunctions);
+        modEventBus.addListener(AsyncLocatorNeoForgeGameTests::registerTestInstances);
 
         IEventBus neoforgeEventBus = NeoForge.EVENT_BUS;
         neoforgeEventBus.addListener((ServerAboutToStartEvent event) -> AsyncLocator.setupExecutorService());
