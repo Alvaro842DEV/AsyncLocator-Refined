@@ -33,7 +33,6 @@ import net.minecraft.world.level.storage.loot.BuiltInLootTables;
  * which is exactly what the invalidation/refund code paths need, while biome locates succeed
  * immediately (the whole world is plains).
  */
-
 public final class AsyncLocatorGameTestLogic {
     // Structure template shared by both loaders: data/asynclocator/structure/empty.nbt
     public static final String EMPTY_STRUCTURE = "asynclocator:empty";
