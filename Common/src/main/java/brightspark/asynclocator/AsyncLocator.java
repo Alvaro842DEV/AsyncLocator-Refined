@@ -124,6 +124,19 @@ public class AsyncLocator {
         ALConstants.logDebug(
                 "Creating locate task for {} in {} around {} within {} chunks", structureTag, level, pos, searchRadius);
 
+        if (!skipKnownStructures) {
+            return coalesced(
+                    level,
+                    structureTag,
+                    pos,
+                    searchRadius,
+                    () -> startLocateLevel(level, structureTag, pos, searchRadius, false));
+        }
+        return startLocateLevel(level, structureTag, pos, searchRadius, true);
+    }
+
+    private static LocateTask<BlockPos> startLocateLevel(
+            ServerLevel level, TagKey<Structure> structureTag, BlockPos pos, int searchRadius, boolean skipKnown) {
         CompletableFuture<BlockPos> completableFuture = new CompletableFuture<>();
         Future<?> future = submitTask(
                 completableFuture,
@@ -145,12 +158,37 @@ public class AsyncLocator {
         ALConstants.logDebug(
                 "Creating locate task for {} in {} around {} within {} chunks", structureSet, level, pos, searchRadius);
 
+        if (!skipKnownStructures) {
+            return coalesced(
+                    level,
+                    structureSet,
+                    pos,
+                    searchRadius,
+                    () -> startLocateChunkGenerator(level, structureSet, pos, searchRadius, false));
+        }
+        return startLocateChunkGenerator(level, structureSet, pos, searchRadius, true);
+    }
+
+    private static LocateTask<Pair<BlockPos, Holder<Structure>>> startLocateChunkGenerator(
+            ServerLevel level, HolderSet<Structure> structureSet, BlockPos pos, int searchRadius, boolean skipKnown) {
         CompletableFuture<Pair<BlockPos, Holder<Structure>>> completableFuture = new CompletableFuture<>();
         Future<?> future = submitTask(
                 completableFuture,
-                () -> doLocateChunkGenerator(
-                        completableFuture, level, structureSet, pos, searchRadius, skipKnownStructures));
+                () -> doLocateChunkGenerator(completableFuture, level, structureSet, pos, searchRadius, skipKnown));
         return new LocateTask<>(level.getServer(), completableFuture, future);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static <T> LocateTask<T> coalesced(
+            ServerLevel level, Object target, BlockPos pos, int searchRadius, Supplier<LocateTask<T>> starter) {
+        LocateKey key = new LocateKey(level.dimension(), target, pos.immutable(), searchRadius);
+        CompletableFuture<T> shared = (CompletableFuture<T>) PENDING_LOCATES.computeIfAbsent(key, k -> {
+            CompletableFuture<T> base = starter.get().completableFuture();
+            base.whenComplete((result, throwable) -> PENDING_LOCATES.remove(k, base));
+            return base;
+        });
+        CompletableFuture<T> child = shared.copy();
+        return new LocateTask<>(level.getServer(), child, child);
     }
 
     private static void doLocateLevel(
@@ -366,13 +404,15 @@ public class AsyncLocator {
             return this;
         }
 
+        /*
+         * Always queues the runnable onto the server thread instead of running it immediately.
+         * This avoids callbacks firing before the caller has finished its setup
+         */
         private void deferToServerThread(Runnable runnable) {
             server.schedule(new TickTask(server.getTickCount(), runnable));
         }
 
-        /**
-         * Helper function that cancels both completableFuture and taskFuture.
-
+        /*
          * Fails this task with a {@link TimeoutException} if it
          * does not finish within the given time
          */
@@ -380,6 +420,10 @@ public class AsyncLocator {
             completableFuture.orTimeout(timeout, unit);
             return this;
         }
+
+        /*
+         * Cancels this caller's futures so pending callbacks are not run.
+         * Cancellation is cooperative and does not stop an ongoing search.
          */
         public void cancel() {
             taskFuture.cancel(true);
