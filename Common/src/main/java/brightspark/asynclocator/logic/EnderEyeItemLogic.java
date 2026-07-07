@@ -32,15 +32,11 @@ public class EnderEyeItemLogic {
     public static void locateAsync(ServerLevel level, Player player, EyeOfEnder eyeOfEnder, EnderEyeItem enderEyeItem) {
         ((EyeOfEnderData) eyeOfEnder).setLocateTaskOngoing(true);
 
-        LocateTask<BlockPos> locateTask =
-                AsyncLocator.locate(level, StructureTags.EYE_OF_ENDER_LOCATED, player.blockPosition(), 100, false);
-        locateTask
-                .completableFuture()
-                .orTimeout(LOCATE_TIMEOUT_SECONDS, TimeUnit.SECONDS)
-                .whenComplete((pos, throwable) -> locateTask
-                        .server()
-                        .submit(() -> handleLocateResult(
-                                level, player, eyeOfEnder, enderEyeItem, locateTask, pos, throwable)));
+        LocateTask<BlockPos> locateTask = AsyncLocator.locate(
+                        level, StructureTags.EYE_OF_ENDER_LOCATED, player.blockPosition(), 100, false)
+                .withTimeout(LOCATE_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+        locateTask.handleOnServerThread((pos, throwable) ->
+                handleLocateResult(level, player, eyeOfEnder, enderEyeItem, locateTask, pos, throwable));
     }
 
     private static void handleLocateResult(

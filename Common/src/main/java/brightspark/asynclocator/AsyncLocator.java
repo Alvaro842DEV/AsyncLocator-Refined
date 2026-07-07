@@ -318,7 +318,7 @@ public class AsyncLocator {
          * Note: Will NOT be called if an exception occurred: use {@link #onErrorOnServerThread} for that.
          */
         public LocateTask<T> thenOnServerThread(Consumer<T> action) {
-            completableFuture.thenAccept(result -> server.submit(() -> action.accept(result)));
+            completableFuture.thenAccept(result -> deferToServerThread(() -> action.accept(result)));
             return this;
         }
 
@@ -338,7 +338,7 @@ public class AsyncLocator {
          */
         public LocateTask<T> onErrorOnServerThread(Consumer<Throwable> errorHandler) {
             completableFuture.exceptionally(t -> {
-                server.submit(() -> errorHandler.accept(t));
+                deferToServerThread(() -> errorHandler.accept(t));
                 return null;
             });
             return this;
@@ -362,7 +362,7 @@ public class AsyncLocator {
          */
         public LocateTask<T> handleOnServerThread(BiConsumer<T, Throwable> handler) {
             completableFuture.handle((result, throwable) -> {
-                server.submit(() -> handler.accept(result, throwable));
+                deferToServerThread(() -> handler.accept(result, throwable));
                 return null;
             });
             return this;
