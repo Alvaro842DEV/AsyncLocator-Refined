@@ -5,6 +5,7 @@ import java.text.NumberFormat;
 import java.util.List;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
@@ -315,8 +316,58 @@ public class AsyncLocator {
          * thread.
          */
         public LocateTask<T> thenOnServerThread(Consumer<T> action) {
-            completableFuture.thenAccept(pos -> server.submit(() -> action.accept(pos)));
+            completableFuture.thenAccept(result -> deferToServerThread(() -> action.accept(result)));
             return this;
+        }
+
+        /**
+         * Executes errorHandler when task fails with an exception (on task's thread).
+         */
+        public LocateTask<T> onError(Consumer<Throwable> errorHandler) {
+            completableFuture.exceptionally(t -> {
+                errorHandler.accept(t);
+                return null;
+            });
+            return this;
+        }
+
+        /**
+         * Executes errorHandler when task fails with an exception (on server thread)
+         */
+        public LocateTask<T> onErrorOnServerThread(Consumer<Throwable> errorHandler) {
+            completableFuture.exceptionally(t -> {
+                deferToServerThread(() -> errorHandler.accept(t));
+                return null;
+            });
+            return this;
+        }
+
+        /**
+         * Handles both success and error cases (on task's thread).
+         * @param handler receives (result, throwable) one will always be null
+         */
+        public LocateTask<T> handle(BiConsumer<T, Throwable> handler) {
+            completableFuture.handle((result, throwable) -> {
+                handler.accept(result, throwable);
+                return null;
+            });
+            return this;
+        }
+
+        /**
+         * Handles both success and error cases (on server thread)
+         * @param handler receives (result, throwable) one will always be null
+         */
+        public LocateTask<T> handleOnServerThread(BiConsumer<T, Throwable> handler) {
+            completableFuture.handle((result, throwable) -> {
+                deferToServerThread(() -> handler.accept(result, throwable));
+                return null;
+            });
+            return this;
+        }
+
+        private void deferToServerThread(Runnable runnable) {
+            server.schedule(new TickTask(server.getTickCount(), runnable));
         }
 
         /**
