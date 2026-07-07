@@ -24,6 +24,9 @@
   "entrypoints": {
     "main": [
       "brightspark.asynclocator.AsyncLocatorModFabric"
+    ],
+    "fabric-gametest": [
+      "brightspark.asynclocator.gametest.AsyncLocatorFabricGameTests"
     ]
   },
   "mixins": [

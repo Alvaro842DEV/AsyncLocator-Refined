@@ -43,6 +43,16 @@ loom {
             ideConfigGenerated(true)
             runDir("run")
         }
+        // Run with: ./gradlew :Fabric:runGametest
+        create("gametest") {
+            server()
+            vmArg("-Dfabric-api.gametest")
+            vmArg(
+                "-Dfabric-api.gametest.report-file=" +
+                    layout.buildDirectory.file("gametest/junit.xml").get().asFile.absolutePath
+            )
+            runDir("build/gametest")
+        }
     }
 }
 
