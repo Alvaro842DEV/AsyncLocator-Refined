@@ -5,11 +5,11 @@ plugins {
     id("fabric-loom")
 }
 
-val mod_name: String by project
-val minecraft_version: String by project
-val mod_id: String by project
-val fabric_loader_version: String by project
-val fabric_version: String by project
+val mod_name = providers.gradleProperty("mod_name").get()
+val minecraft_version = providers.gradleProperty("minecraft_version").get()
+val mod_id = providers.gradleProperty("mod_id").get()
+val fabric_loader_version = providers.gradleProperty("fabric_loader_version").get()
+val fabric_version = providers.gradleProperty("fabric_version").get()
 
 base {
     archivesName.set("$mod_name-fabric-$minecraft_version")
@@ -44,6 +44,7 @@ loom {
             runDir("run")
         }
         // Run with: ./gradlew :Fabric:runGametest
+        @Suppress("DEPRECATION")
         create("gametest") {
             server()
             vmArg("-Dfabric-api.gametest")

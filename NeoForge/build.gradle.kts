@@ -4,10 +4,10 @@ plugins {
     id("net.neoforged.moddev")
 }
 
-val mod_name: String by project
-val minecraft_version: String by project
-val mod_id: String by project
-val neoforge_version: String by project
+val mod_name = providers.gradleProperty("mod_name").get()
+val minecraft_version = providers.gradleProperty("minecraft_version").get()
+val mod_id = providers.gradleProperty("mod_id").get()
+val neoforge_version = providers.gradleProperty("neoforge_version").get()
 
 base {
     archivesName.set("$mod_name-neoforge-$minecraft_version")
