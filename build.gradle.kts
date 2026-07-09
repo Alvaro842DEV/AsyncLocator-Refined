@@ -13,12 +13,13 @@ subprojects {
     apply(plugin = "java")
     apply(plugin = "com.diffplug.spotless")
 
-    val mod_name: String by project
-    val mod_author: String by project
-    val minecraft_version: String by project
+    val mod_name = providers.gradleProperty("mod_name").get()
+    val mod_author = providers.gradleProperty("mod_author").get()
+    val minecraft_version = providers.gradleProperty("minecraft_version").get()
 
     configure<JavaPluginExtension> {
         toolchain.languageVersion.set(JavaLanguageVersion.of(21))
+        withSourcesJar()
     }
 
     tasks.named<Jar>("jar") {
@@ -65,9 +66,19 @@ subprojects {
     }
 
     tasks.named<ProcessResources>("processResources") {
-        val props = project.properties
+        val mod_id = providers.gradleProperty("mod_id").get()
+        val mod_credits = providers.gradleProperty("mod_credits").get()
+        val expandProps = mapOf(
+            "version" to project.version.toString(),
+            "minecraft_version" to minecraft_version,
+            "mod_id" to mod_id,
+            "mod_name" to mod_name,
+            "mod_author" to mod_author,
+            "mod_credits" to mod_credits,
+        )
+        inputs.properties(expandProps)
         filesMatching(listOf("pack.mcmeta", "fabric.mod.json", "neoforge.mods.toml", "*.mixins.json")) {
-            expand(props)
+            expand(expandProps)
         }
     }
 

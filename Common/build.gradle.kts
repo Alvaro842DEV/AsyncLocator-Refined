@@ -5,9 +5,9 @@ plugins {
     id("org.spongepowered.gradle.vanilla")
 }
 
-val mod_name: String by project
-val minecraft_version: String by project
-val mod_id: String by project
+val mod_name = providers.gradleProperty("mod_name").get()
+val minecraft_version = providers.gradleProperty("minecraft_version").get()
+val mod_id = providers.gradleProperty("mod_id").get()
 
 base {
     archivesName.set("$mod_name-common-$minecraft_version")
@@ -27,9 +27,15 @@ dependencies {
 }
 
 tasks.named<ProcessResources>("processResources") {
-    val props = project.properties
+    val expandProps = mapOf(
+        "version" to project.version.toString(),
+        "minecraft_version" to minecraft_version,
+        "mod_id" to mod_id,
+        "mod_name" to mod_name,
+    )
+    inputs.properties(expandProps)
     filesMatching("pack.mcmeta") {
-        expand(props)
+        expand(expandProps)
     }
 }
 
