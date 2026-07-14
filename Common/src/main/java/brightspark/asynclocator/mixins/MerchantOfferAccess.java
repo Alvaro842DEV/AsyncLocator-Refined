@@ -7,7 +7,7 @@ import org.spongepowered.asm.mixin.gen.Accessor;
 
 @Mixin(MerchantOffer.class)
 public interface MerchantOfferAccess {
-	@Mutable
-	@Accessor
-	void setMaxUses(int maxUses);
+    @Mutable
+    @Accessor
+    void setMaxUses(int maxUses);
 }

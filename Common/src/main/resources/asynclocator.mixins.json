@@ -2,7 +2,6 @@
   "required": true,
   "package": "brightspark.asynclocator.mixins",
   "compatibilityLevel": "JAVA_21",
-  "refmap": "asynclocator.refmap.json",
   "mixins": [
     "DolphinAccessor",
     "DolphinSwimToTreasureGoalMixin",
@@ -16,6 +15,7 @@
     "SetNameFunctionAccessor",
     "SetNameFunctionMixin",
     "SlotMixin",
+    "StructureCheckMixin",
     "TreasureMapForEmeraldsMixin"
   ],
   "client": [],
