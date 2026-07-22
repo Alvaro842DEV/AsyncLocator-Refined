@@ -112,6 +112,14 @@ public class DolphinSwimToTreasureGoalMixin {
     @Unique
     private void handleLocationFound(ServerLevel level, @Nullable BlockPos pos) {
         locateTask = null;
+        if (!AsyncLocator.isLevelActive(level)
+                || this.dolphin.isRemoved()
+                || !this.dolphin.isAlive()
+                || this.dolphin.level() != level) {
+            ALConstants.logDebug("Dolphin is no longer active when its treasure locate result arrived");
+            return;
+        }
+
         if (pos != null) {
             ((DolphinAccessor) (Object) this.dolphin).asynclocator$setTreasurePos(pos);
             ((DolphinSwimToTreasureGoalStuckAccessor) (Object) this).asynclocator$setStuck(false);

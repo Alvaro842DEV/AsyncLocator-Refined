@@ -152,13 +152,17 @@ public abstract class ExplorationMapFunctionMixin {
 
     @Unique
     private void asyncLocator$handleLocateResult(
-        ServerLevel serverLevel,
-        LootContext context,
-        ItemStack pendingMapStack,
-        @Nullable CommonLogic.LootrTarget lootrTarget,
-        Holder<MapDecorationType> decoration,
-        @Nullable BlockPos foundPos
-    ) {
+            ServerLevel serverLevel,
+            LootContext context,
+            ItemStack pendingMapStack,
+            @Nullable CommonLogic.LootrTarget lootrTarget,
+            Holder<MapDecorationType> decoration,
+            @Nullable BlockPos foundPos) {
+        if (!AsyncLocator.isLevelActive(serverLevel)) {
+            ALConstants.logDebug("Exploration map locate result arrived after its server level stopped");
+            return;
+        }
+
         Component mapName = ExplorationMapFunctionLogic.getCachedName(pendingMapStack);
         BlockPos inventoryPos = context.getParamOrNull(LootContextParams.ORIGIN) != null
             ? BlockPos.containing(context.getParam(LootContextParams.ORIGIN))
@@ -167,6 +171,10 @@ public abstract class ExplorationMapFunctionMixin {
         boolean merchantUpdated = false;
         var thisEntity = context.getParamOrNull(LootContextParams.THIS_ENTITY);
         if (thisEntity instanceof AbstractVillager merchant) {
+            if (merchant.isRemoved() || !merchant.isAlive() || merchant.level() != serverLevel) {
+                ALConstants.logDebug("Merchant is no longer active when its exploration map result arrived");
+                return;
+            }
             UUID targetId = CommonLogic.getTrackingUUID(pendingMapStack);
             if (targetId != null) {
                 for (var offer : merchant.getOffers()) {
