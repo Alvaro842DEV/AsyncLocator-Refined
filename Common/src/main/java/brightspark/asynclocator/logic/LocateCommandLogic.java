@@ -32,6 +32,7 @@ public class LocateCommandLogic {
         Stopwatch stopwatch = Stopwatch.createStarted(Util.TICKER);
         AsyncLocator.locate(sourceStack.getLevel(), holderset, originPos, 100, false)
                 .handleOnServerThread((pair, throwable) -> {
+                    if (!AsyncLocator.isLevelActive(sourceStack.getLevel())) return;
                     stopwatch.stop();
                     if (throwable != null) {
                         ALConstants.logError(
@@ -73,6 +74,7 @@ public class LocateCommandLogic {
                         BIOME_SAMPLE_RESOLUTION_HORIZONTAL,
                         BIOME_SAMPLE_RESOLUTION_VERTICAL)
                 .handleOnServerThread((pair, throwable) -> {
+                    if (!AsyncLocator.isLevelActive(sourceStack.getLevel())) return;
                     stopwatch.stop();
                     if (throwable != null) {
                         ALConstants.logError(throwable, "/locate biome failed for {}", biomeResult.asPrintable());

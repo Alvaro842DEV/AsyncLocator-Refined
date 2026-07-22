@@ -59,6 +59,14 @@ public class MerchantLogic {
             @Nullable String displayNameKey,
             Holder<MapDecorationType> destinationTypeHolder,
             @Nullable BlockPos pos) {
+        if (!AsyncLocator.isLevelActive(level)
+                || merchant.isRemoved()
+                || !merchant.isAlive()
+                || merchant.level() != level) {
+            ALConstants.logDebug("Merchant is no longer active when its map locate result arrived");
+            return;
+        }
+
         if (pos == null) {
             ALConstants.logInfo("No location found - invalidating merchant offer");
             invalidateMap(merchant, mapStack);
