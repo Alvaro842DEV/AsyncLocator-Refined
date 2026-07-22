@@ -1,5 +1,6 @@
 package brightspark.asynclocator;
 
+import brightspark.asynclocator.platform.Services;
 import com.mojang.datafixers.util.Pair;
 import java.text.NumberFormat;
 import java.util.List;
@@ -29,6 +30,7 @@ public class AsyncLocator {
      * that a task submission can never race a concurrent shutdown
      */
     private static ExecutorService LOCATING_EXECUTOR_SERVICE = null;
+    private static LocateTaskLimiter LOCATE_TASK_LIMITER = null;
     private static boolean EXECUTOR_STOPPED = false;
     private static final AtomicInteger THREAD_COUNTER = new AtomicInteger(1);
 
@@ -41,8 +43,7 @@ public class AsyncLocator {
     /**
      * Initializes the singleton executor for locating tasks using Java 21 Virtual Threads.
      *
-     * After v1.5.1, we use virtual threads, which are lightweight and managed by the JVM, not the OS.
-     * There is no need to configure thread pool size anymore (automatically scaled)
+     * Searches use virtual threads, while {@link LocateTaskLimiter} limits active and queued work independently.
      */
     public static void setupExecutorService() {
         synchronized (AsyncLocator.class) {
@@ -50,6 +51,12 @@ public class AsyncLocator {
             EXECUTOR_STOPPED = false;
 
             ALConstants.logInfo("Starting locating executor service with virtual threads (Java 21+)");
+
+            int maxConcurrent = Services.CONFIG.maxConcurrentLocates();
+            int maxQueued = Services.CONFIG.maxQueuedLocates();
+            LOCATE_TASK_LIMITER = new LocateTaskLimiter(maxConcurrent, maxQueued);
+            ALConstants.logInfo(
+                    "Locate capacity configured for {} concurrent and {} queued searches", maxConcurrent, maxQueued);
 
             LOCATING_EXECUTOR_SERVICE = Executors.newThreadPerTaskExecutor(Thread.ofVirtual()
                     .name(ALConstants.MOD_ID + "-", THREAD_COUNTER.getAndIncrement())
@@ -64,6 +71,7 @@ public class AsyncLocator {
         synchronized (AsyncLocator.class) {
             executor = LOCATING_EXECUTOR_SERVICE;
             LOCATING_EXECUTOR_SERVICE = null;
+            LOCATE_TASK_LIMITER = null;
             EXECUTOR_STOPPED = true;
         }
 
@@ -90,6 +98,23 @@ public class AsyncLocator {
         }
     }
 
+    public static boolean isLevelActive(ServerLevel level) {
+        MinecraftServer server = level.getServer();
+        return !server.isStopped() && server.getLevel(level.dimension()) == level;
+    }
+
+    public static void updateLocateLimitsFromConfig() {
+        int maxConcurrent = Services.CONFIG.maxConcurrentLocates();
+        int maxQueued = Services.CONFIG.maxQueuedLocates();
+        synchronized (AsyncLocator.class) {
+            if (LOCATE_TASK_LIMITER != null) {
+                LOCATE_TASK_LIMITER.configure(maxConcurrent, maxQueued);
+                ALConstants.logInfo(
+                        "Updated locate capacity to {} concurrent and {} queued searches", maxConcurrent, maxQueued);
+            }
+        }
+    }
+
     private static Future<?> submitTask(CompletableFuture<?> completableFuture, Runnable task) {
         synchronized (AsyncLocator.class) {
             if (LOCATING_EXECUTOR_SERVICE == null || LOCATING_EXECUTOR_SERVICE.isShutdown()) {
@@ -102,9 +127,31 @@ public class AsyncLocator {
                 ALConstants.logWarn("Locating executor service not initialized yet: creating lazily");
                 setupExecutorService();
             }
+
+            LocateTaskLimiter limiter = LOCATE_TASK_LIMITER;
+            if (limiter == null) {
+                RejectedExecutionException exception =
+                        new RejectedExecutionException("Locate task limiter is not initialized");
+                completableFuture.completeExceptionally(exception);
+                return CompletableFuture.completedFuture(null);
+            }
+            if (!limiter.tryAdmit()) {
+                RejectedExecutionException exception =
+                        new RejectedExecutionException("Async locate capacity exhausted (maximum "
+                                + Services.CONFIG.maxConcurrentLocates()
+                                + " concurrent and "
+                                + Services.CONFIG.maxQueuedLocates()
+                                + " queued searches)");
+                completableFuture.completeExceptionally(exception);
+                return CompletableFuture.completedFuture(null);
+            }
+
+            FutureTask<Void> admittedTask = limiter.createTask(completableFuture, task);
             try {
-                return LOCATING_EXECUTOR_SERVICE.submit(task);
+                LOCATING_EXECUTOR_SERVICE.execute(admittedTask);
+                return admittedTask;
             } catch (RejectedExecutionException e) {
+                admittedTask.cancel(false);
                 completableFuture.completeExceptionally(e);
                 return CompletableFuture.completedFuture(null);
             }
@@ -182,11 +229,22 @@ public class AsyncLocator {
     private static <T> LocateTask<T> coalesced(
             ServerLevel level, Object target, BlockPos pos, int searchRadius, Supplier<LocateTask<T>> starter) {
         LocateKey key = new LocateKey(level.dimension(), target, pos.immutable(), searchRadius);
-        CompletableFuture<T> shared = (CompletableFuture<T>) PENDING_LOCATES.computeIfAbsent(key, k -> {
-            CompletableFuture<T> base = starter.get().completableFuture();
-            base.whenComplete((result, throwable) -> PENDING_LOCATES.remove(k, base));
-            return base;
-        });
+        CompletableFuture<T> placeholder = new CompletableFuture<>();
+        CompletableFuture<T> shared = (CompletableFuture<T>) PENDING_LOCATES.putIfAbsent(key, placeholder);
+        if (shared == null) {
+            shared = placeholder;
+            try {
+                CompletableFuture<T> base = starter.get().completableFuture();
+                base.whenComplete((result, throwable) -> {
+                    if (throwable == null) placeholder.complete(result);
+                    else placeholder.completeExceptionally(throwable);
+                    PENDING_LOCATES.remove(key, placeholder);
+                });
+            } catch (Throwable throwable) {
+                placeholder.completeExceptionally(throwable);
+                PENDING_LOCATES.remove(key, placeholder);
+            }
+        }
         CompletableFuture<T> child = shared.copy();
         return new LocateTask<>(level.getServer(), child, child);
     }

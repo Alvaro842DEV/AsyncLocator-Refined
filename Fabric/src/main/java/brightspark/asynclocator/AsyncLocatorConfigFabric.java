@@ -9,9 +9,32 @@ import net.fabricmc.loader.api.FabricLoader;
 
 public class AsyncLocatorConfigFabric {
 
+    private static final int DEFAULT_MAX_CONCURRENT_LOCATES = 2;
+    private static final int MIN_MAX_CONCURRENT_LOCATES = 1;
+    private static final int MAX_MAX_CONCURRENT_LOCATES = 256;
+    private static final int DEFAULT_MAX_QUEUED_LOCATES = 128;
+    private static final int MIN_MAX_QUEUED_LOCATES = 0;
+    private static final int MAX_MAX_QUEUED_LOCATES = 10_000;
     private static final int DEFAULT_BIOME_RADIUS = 6400;
     private static final int MIN_BIOME_RADIUS = 1600;
     private static final int MAX_BIOME_RADIUS = 12800;
+
+    @Config(
+            value = "maxConcurrentLocates",
+            comment = """
+				Maximum locate searches that may execute concurrently.
+				The default value is recommended for most servers. Higher values can improve throughput,
+				but may increase CPU, disk, chunk-generation, and main-thread completion load.
+				""",
+            min = MIN_MAX_CONCURRENT_LOCATES,
+            max = MAX_MAX_CONCURRENT_LOCATES)
+    public static int MAX_CONCURRENT_LOCATES = DEFAULT_MAX_CONCURRENT_LOCATES;
+
+    @Config(value = "maxQueuedLocates", comment = """
+				Maximum locate searches that may wait for execution capacity.
+				Requests above the active plus queued limit fail immediately instead of consuming unbounded resources.
+				""", min = MIN_MAX_QUEUED_LOCATES, max = MAX_MAX_QUEUED_LOCATES)
+    public static int MAX_QUEUED_LOCATES = DEFAULT_MAX_QUEUED_LOCATES;
 
     @Config(value = "biomeSearchRadius", comment = """
 			Maximum search radius in blocks for /locate biome command.
@@ -63,6 +86,8 @@ public class AsyncLocatorConfigFabric {
 
     // Helper method
     private static void resetToDefaults() {
+        MAX_CONCURRENT_LOCATES = DEFAULT_MAX_CONCURRENT_LOCATES;
+        MAX_QUEUED_LOCATES = DEFAULT_MAX_QUEUED_LOCATES;
         BIOME_SEARCH_RADIUS = DEFAULT_BIOME_RADIUS;
         REMOVE_OFFER = false;
         FeatureToggles.DOLPHIN_TREASURE_ENABLED = true;
@@ -83,6 +108,29 @@ public class AsyncLocatorConfigFabric {
 
                 // Validate values in case of manual edits
                 boolean needsRewrite = false;
+
+                if (MAX_CONCURRENT_LOCATES > MAX_MAX_CONCURRENT_LOCATES
+                        || MAX_CONCURRENT_LOCATES < MIN_MAX_CONCURRENT_LOCATES) {
+                    ALConstants.logError(
+                            "Invalid maxConcurrentLocates value ({}). Must be between {}-{}. Resetting to default ({}).",
+                            MAX_CONCURRENT_LOCATES,
+                            MIN_MAX_CONCURRENT_LOCATES,
+                            MAX_MAX_CONCURRENT_LOCATES,
+                            DEFAULT_MAX_CONCURRENT_LOCATES);
+                    MAX_CONCURRENT_LOCATES = DEFAULT_MAX_CONCURRENT_LOCATES;
+                    needsRewrite = true;
+                }
+
+                if (MAX_QUEUED_LOCATES > MAX_MAX_QUEUED_LOCATES || MAX_QUEUED_LOCATES < MIN_MAX_QUEUED_LOCATES) {
+                    ALConstants.logError(
+                            "Invalid maxQueuedLocates value ({}). Must be between {}-{}. Resetting to default ({}).",
+                            MAX_QUEUED_LOCATES,
+                            MIN_MAX_QUEUED_LOCATES,
+                            MAX_MAX_QUEUED_LOCATES,
+                            DEFAULT_MAX_QUEUED_LOCATES);
+                    MAX_QUEUED_LOCATES = DEFAULT_MAX_QUEUED_LOCATES;
+                    needsRewrite = true;
+                }
 
                 if (BIOME_SEARCH_RADIUS > MAX_BIOME_RADIUS || BIOME_SEARCH_RADIUS < MIN_BIOME_RADIUS) {
                     ALConstants.logError(

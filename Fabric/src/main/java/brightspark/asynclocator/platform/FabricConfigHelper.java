@@ -5,6 +5,16 @@ import brightspark.asynclocator.platform.services.ConfigHelper;
 
 public class FabricConfigHelper implements ConfigHelper {
     @Override
+    public int maxConcurrentLocates() {
+        return AsyncLocatorConfigFabric.MAX_CONCURRENT_LOCATES;
+    }
+
+    @Override
+    public int maxQueuedLocates() {
+        return AsyncLocatorConfigFabric.MAX_QUEUED_LOCATES;
+    }
+
+    @Override
     public int biomeSearchRadius() {
         return AsyncLocatorConfigFabric.BIOME_SEARCH_RADIUS;
     }

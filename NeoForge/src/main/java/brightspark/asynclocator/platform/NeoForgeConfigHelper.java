@@ -6,6 +6,16 @@ import brightspark.asynclocator.platform.services.ConfigHelper;
 public class NeoForgeConfigHelper implements ConfigHelper {
 
     @Override
+    public int maxConcurrentLocates() {
+        return AsyncLocatorConfigNeoForge.MAX_CONCURRENT_LOCATES.get();
+    }
+
+    @Override
+    public int maxQueuedLocates() {
+        return AsyncLocatorConfigNeoForge.MAX_QUEUED_LOCATES.get();
+    }
+
+    @Override
     public int biomeSearchRadius() {
         return AsyncLocatorConfigNeoForge.BIOME_SEARCH_RADIUS.get();
     }

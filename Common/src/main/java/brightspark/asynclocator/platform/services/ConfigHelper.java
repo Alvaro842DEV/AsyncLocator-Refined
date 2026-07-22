@@ -2,6 +2,16 @@ package brightspark.asynclocator.platform.services;
 
 public interface ConfigHelper {
     /**
+     * Maximum number of locate searches allowed to execute concurrently.
+     */
+    int maxConcurrentLocates();
+
+    /**
+     * Maximum number of locate searches allowed to wait for execution capacity.
+     */
+    int maxQueuedLocates();
+
+    /**
      * The maximum search radius for the /locate biome command.
      */
     int biomeSearchRadius();
