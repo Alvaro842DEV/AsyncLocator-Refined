@@ -24,6 +24,13 @@ minecraft {
 dependencies {
     compileOnly("org.jetbrains:annotations:26.0.2")
     compileOnly("org.spongepowered:mixin:0.8.7")
+    testImplementation(platform("org.junit:junit-bom:5.13.4"))
+    testImplementation("org.junit.jupiter:junit-jupiter")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+}
+
+tasks.test {
+    useJUnitPlatform()
 }
 
 tasks.named<ProcessResources>("processResources") {
