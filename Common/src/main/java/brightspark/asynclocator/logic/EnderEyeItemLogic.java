@@ -47,6 +47,11 @@ public class EnderEyeItemLogic {
             LocateTask<BlockPos> locateTask,
             @Nullable BlockPos pos,
             @Nullable Throwable throwable) {
+        if (!AsyncLocator.isLevelActive(level)) {
+            ALConstants.logDebug("EyeOfEnder locate result arrived after its server level stopped");
+            return;
+        }
+
         ((EyeOfEnderData) eyeOfEnder).setLocateTaskOngoing(false);
 
         // Entity may have been removed/unloaded while we were locating
@@ -76,10 +81,12 @@ public class EnderEyeItemLogic {
 
         ALConstants.logInfo("Location found - updating eye of ender entity");
         eyeOfEnder.signalTo(pos);
-        if (player instanceof ServerPlayer serverPlayer) {
-            CriteriaTriggers.USED_ENDER_EYE.trigger(serverPlayer, pos);
+        if (!player.isRemoved() && player.level() == level) {
+            if (player instanceof ServerPlayer serverPlayer) {
+                CriteriaTriggers.USED_ENDER_EYE.trigger(serverPlayer, pos);
+            }
+            player.awardStat(Stats.ITEM_USED.get(enderEyeItem));
         }
-        player.awardStat(Stats.ITEM_USED.get(enderEyeItem));
     }
 
     /*

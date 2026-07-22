@@ -31,6 +31,7 @@ public class AsyncLocatorModNeoForge {
             if (event.getConfig().getSpec() == AsyncLocatorConfigNeoForge.SPEC) {
                 ALConstants.logInfo("Config reloaded");
                 AsyncLocatorConfigNeoForge.validateConfig();
+                AsyncLocator.updateLocateLimitsFromConfig();
                 AsyncLocatorModCommon.printConfigs();
             }
         });
