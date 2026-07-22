@@ -3,7 +3,10 @@
   "package": "brightspark.asynclocator.mixins",
   "compatibilityLevel": "JAVA_21",
   "mixins": [
+    "ChunkGeneratorMixin",
+    "DolphinAccessor",
     "DolphinSwimToTreasureGoalMixin",
+    "DolphinSwimToTreasureGoalStuckAccessor",
     "EnderEyeItemMixin",
     "ExplorationMapFunctionMixin",
     "EyeOfEnderMixin",
