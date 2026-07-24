@@ -88,13 +88,14 @@ public abstract class ExplorationMapFunctionMixin {
     }
 
     @Inject(
-        method = "run(Lnet/minecraft/world/item/ItemStack;Lnet/minecraft/world/level/storage/loot/LootContext;)Lnet/minecraft/world/item/ItemStack;",
-        at = @At(
-            value = "INVOKE",
-            target = "Lnet/minecraft/server/level/ServerLevel;findNearestMapStructure(Lnet/minecraft/tags/TagKey;Lnet/minecraft/core/BlockPos;IZ)Lnet/minecraft/core/BlockPos;"
-        ),
-        cancellable = true
-    )
+            method =
+                    "run(Lnet/minecraft/world/item/ItemStack;Lnet/minecraft/world/level/storage/loot/LootContext;)Lnet/minecraft/world/item/ItemStack;",
+            at =
+                    @At(
+                            value = "INVOKE",
+                            target =
+                                    "Lnet/minecraft/server/level/ServerLevel;findNearestMapStructure(Lnet/minecraft/tags/TagKey;Lnet/minecraft/core/BlockPos;IZ)Lnet/minecraft/core/BlockPos;"),
+            cancellable = true)
     private void asyncLocator$locateAsync(ItemStack stack, LootContext context, CallbackInfoReturnable<ItemStack> cir) {
         if (!Services.CONFIG.explorationMapEnabled()) return;
         if (context.getParamOrNull(LootContextParams.ORIGIN) == null) return;
@@ -113,13 +114,7 @@ public abstract class ExplorationMapFunctionMixin {
         ALConstants.logDebug("Intercepting exploration map creation for {}.", destination.location());
 
         MapItemSavedData mapData = MapItemSavedData.createFresh(
-            originPos.getX(),
-            originPos.getZ(),
-            this.zoom,
-            false,
-            false,
-            serverLevel.dimension()
-        );
+                originPos.getX(), originPos.getZ(), this.zoom, false, false, serverLevel.dimension());
         MapId newMapId = serverLevel.getFreeMapId();
         serverLevel.setMapData(newMapId, mapData);
 
@@ -128,24 +123,18 @@ public abstract class ExplorationMapFunctionMixin {
         CommonLogic.LootrTarget lootrTarget = CommonLogic.getActiveLootrTarget();
         ALConstants.logDebug("Assigned MapId {} to exploration map ItemStack.", newMapId);
 
-        AsyncLocator.locate(
-            serverLevel,
-            destination,
-            originPos,
-            searchRadius,
-            skipKnownStructures
-        ).handleOnServerThread((foundPos, throwable) -> {
-            if (throwable != null) {
-                ALConstants.logError(
-                    throwable,
-                    "Exploration map locate for {} failed - invalidating map",
-                    destination.location()
-                );
-                foundPos = null;
-            }
-            asyncLocator$handleLocateResult(
-                    serverLevel, context, pendingMapStack, lootrTarget, decoration.get(), foundPos);
-        });
+        AsyncLocator.locate(serverLevel, destination, originPos, searchRadius, skipKnownStructures)
+                .handleOnServerThread((foundPos, throwable) -> {
+                    if (throwable != null) {
+                        ALConstants.logError(
+                                throwable,
+                                "Exploration map locate for {} failed - invalidating map",
+                                destination.location());
+                        foundPos = null;
+                    }
+                    asyncLocator$handleLocateResult(
+                            serverLevel, context, pendingMapStack, lootrTarget, decoration.get(), foundPos);
+                });
 
         cir.setReturnValue(pendingMapStack);
     }
@@ -165,8 +154,8 @@ public abstract class ExplorationMapFunctionMixin {
 
         Component mapName = ExplorationMapFunctionLogic.getCachedName(pendingMapStack);
         BlockPos inventoryPos = context.getParamOrNull(LootContextParams.ORIGIN) != null
-            ? BlockPos.containing(context.getParam(LootContextParams.ORIGIN))
-            : null;
+                ? BlockPos.containing(context.getParam(LootContextParams.ORIGIN))
+                : null;
 
         boolean merchantUpdated = false;
         var thisEntity = context.getParamOrNull(LootContextParams.THIS_ENTITY);
@@ -183,14 +172,7 @@ public abstract class ExplorationMapFunctionMixin {
                     if (targetId.equals(offerId)) {
                         if (foundPos != null) {
                             ALConstants.logDebug("Finalizing map in merchant offer (UUID: {})", offerId);
-                            CommonLogic.finalizeMap(
-                                result,
-                                serverLevel,
-                                foundPos,
-                                this.zoom,
-                                decoration,
-                                mapName
-                            );
+                            CommonLogic.finalizeMap(result, serverLevel, foundPos, this.zoom, decoration, mapName);
                         } else {
                             ALConstants.logDebug("Clearing pending map in merchant offer (UUID: {})", offerId);
                             CommonLogic.clearPendingState(result);
@@ -207,52 +189,23 @@ public abstract class ExplorationMapFunctionMixin {
         if (!merchantUpdated) {
             if (foundPos != null) {
                 ALConstants.logInfo(
-                    "Async location found for exploration map {}: {}",
-                    destination.location(),
-                    foundPos
-                );
+                        "Async location found for exploration map {}: {}", destination.location(), foundPos);
 
                 boolean updated = CommonLogic.tryUpdateMapInLootrTarget(
-                    serverLevel,
-                    lootrTarget,
-                    pendingMapStack,
-                    foundPos,
-                    this.zoom,
-                    decoration,
-                    mapName
-                );
+                        serverLevel, lootrTarget, pendingMapStack, foundPos, this.zoom, decoration, mapName);
 
                 if (!updated && inventoryPos != null) {
                     Services.EXPLORATION_MAP_FUNCTION_LOGIC.updateMap(
-                        pendingMapStack,
-                        serverLevel,
-                        foundPos,
-                        this.zoom,
-                        decoration,
-                        inventoryPos,
-                        mapName
-                    );
+                            pendingMapStack, serverLevel, foundPos, this.zoom, decoration, inventoryPos, mapName);
                 } else if (!updated) {
-                    CommonLogic.finalizeMap(
-                        pendingMapStack,
-                        serverLevel,
-                        foundPos,
-                        this.zoom,
-                        decoration,
-                        mapName
-                    );
+                    CommonLogic.finalizeMap(pendingMapStack, serverLevel, foundPos, this.zoom, decoration, mapName);
                 }
             } else {
                 ALConstants.logInfo(
-                    "Async location not found for exploration map {} -> Invalidating",
-                    destination.location()
-                );
+                        "Async location not found for exploration map {} -> Invalidating", destination.location());
 
-                boolean invalidated = CommonLogic.tryInvalidateMapInLootrTarget(
-                    serverLevel,
-                    lootrTarget,
-                    pendingMapStack
-                );
+                boolean invalidated =
+                        CommonLogic.tryInvalidateMapInLootrTarget(serverLevel, lootrTarget, pendingMapStack);
 
                 if (!invalidated && inventoryPos != null) {
                     Services.EXPLORATION_MAP_FUNCTION_LOGIC.invalidateMap(pendingMapStack, serverLevel, inventoryPos);
