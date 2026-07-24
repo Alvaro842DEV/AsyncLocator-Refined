@@ -121,7 +121,7 @@ public class DolphinSwimToTreasureGoalMixin {
         }
 
         if (pos != null) {
-            ((DolphinAccessor) (Object) this.dolphin).asynclocator$setTreasurePos(pos);
+            this.dolphin.setTreasurePos(pos);
             ((DolphinSwimToTreasureGoalStuckAccessor) (Object) this).asynclocator$setStuck(false);
             level.broadcastEntityEvent(this.dolphin, (byte) 38);
             ALConstants.logInfo("Location found at {} - dolphin will now swim to treasure", pos);
