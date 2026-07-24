@@ -36,8 +36,7 @@ public class AsyncLocatorModNeoForge {
             }
         });
 
-        modEventBus.addListener(AsyncLocatorNeoForgeGameTests::registerTestFunctions);
-        modEventBus.addListener(AsyncLocatorNeoForgeGameTests::registerTestInstances);
+        modEventBus.addListener(AsyncLocatorNeoForgeGameTests::register);
 
         IEventBus neoforgeEventBus = NeoForge.EVENT_BUS;
         neoforgeEventBus.addListener((ServerAboutToStartEvent event) -> AsyncLocator.setupExecutorService());

@@ -59,11 +59,11 @@ public final class AsyncLocatorGameTestLogic {
                 });
 
         helper.succeedWhen(() -> {
-            helper.assertTrue(completed.get(), Component.literal("Locate task did not complete"));
+            helper.assertTrue(completed.get(), "Locate task did not complete");
             helper.assertTrue(
                     correct.get(),
-                    Component.literal("Expected a null result delivered on the server thread"
-                            + " (structures are disabled in game test worlds)"));
+                    "Expected a null result delivered on the server thread"
+                            + " (structures are disabled in game test worlds)");
         });
     }
 
@@ -82,8 +82,7 @@ public final class AsyncLocatorGameTestLogic {
 
         helper.succeedWhen(() -> helper.assertTrue(
                 firstCompleted.get() && secondSettled.get(),
-                Component.literal("Expected the first caller to complete normally"
-                        + " despite its coalesced sibling being cancelled")));
+                "Expected the first caller to complete normally" + " despite its coalesced sibling being cancelled"));
     }
 
     public static void biomeLocateFindsPlains(GameTestHelper helper) {
@@ -99,8 +98,7 @@ public final class AsyncLocatorGameTestLogic {
                         64)
                 .handleOnServerThread((pair, throwable) -> found.set(throwable == null && pair != null));
 
-        helper.succeedWhen(() ->
-                helper.assertTrue(found.get(), Component.literal("Expected to find a plains biome in a flat world")));
+        helper.succeedWhen(() -> helper.assertTrue(found.get(), "Expected to find a plains biome in a flat world"));
     }
 
     public static void explorationMapInvalidatesWhenNothingFound(GameTestHelper helper) {
@@ -108,16 +106,15 @@ public final class AsyncLocatorGameTestLogic {
         helper.setBlock(new BlockPos(1, 1, 1), Blocks.STONE);
         helper.setBlock(chestPos, Blocks.CHEST);
 
-        ChestBlockEntity chest = helper.getBlockEntity(chestPos, ChestBlockEntity.class);
+        ChestBlockEntity chest = helper.getBlockEntity(chestPos);
         chest.setLootTable(BuiltInLootTables.SHIPWRECK_MAP, 42L);
         chest.unpackLootTable(null);
 
-        helper.assertTrue(
-                containsPendingMap(chest), Component.literal("Expected a pending map right after loot generation"));
+        helper.assertTrue(containsPendingMap(chest), "Expected a pending map right after loot generation");
 
         helper.succeedWhen(() -> helper.assertTrue(
                 containsItem(chest, Items.MAP) && !containsPendingMap(chest),
-                Component.literal("Expected the pending map to be invalidated into a plain map")));
+                "Expected the pending map to be invalidated into a plain map"));
     }
 
     public static void merchantMapInvalidatesWhenNothingFound(GameTestHelper helper) {
@@ -132,15 +129,15 @@ public final class AsyncLocatorGameTestLogic {
                 12,
                 5,
                 StructureTags.ON_TREASURE_MAPS);
-        helper.assertTrue(offer != null, Component.literal("Expected updateMapAsync to create an offer"));
+        helper.assertTrue(offer != null, "Expected updateMapAsync to create an offer");
         helper.assertTrue(
                 CommonLogic.isEmptyPendingMap(offer.getResult()),
-                Component.literal("Expected the offer result to start as a pending map"));
+                "Expected the offer result to start as a pending map");
         villager.getOffers().add(offer);
 
         helper.succeedWhen(() -> helper.assertTrue(
                 !CommonLogic.isEmptyPendingMap(offer.getResult()) && offer.isOutOfStock(),
-                Component.literal("Expected the pending map offer to be invalidated and out of stock")));
+                "Expected the pending map offer to be invalidated and out of stock"));
     }
 
     public static void eyeOfEnderRefundsWhenNothingFound(GameTestHelper helper) {
@@ -162,8 +159,7 @@ public final class AsyncLocatorGameTestLogic {
 
     public static void finalizeMapProducesUsableMap(GameTestHelper helper) {
         ItemStack stack = CommonLogic.createManagedMap();
-        helper.assertTrue(
-                CommonLogic.isEmptyPendingMap(stack), Component.literal("Expected a fresh managed map to be pending"));
+        helper.assertTrue(CommonLogic.isEmptyPendingMap(stack), "Expected a fresh managed map to be pending");
 
         CommonLogic.finalizeMap(
                 stack,
@@ -174,11 +170,8 @@ public final class AsyncLocatorGameTestLogic {
                 Component.literal("Async Locator Test Map"));
 
         helper.assertTrue(
-                !CommonLogic.isEmptyPendingMap(stack),
-                Component.literal("Expected the pending state to be cleared after finalizing"));
-        helper.assertTrue(
-                stack.get(DataComponents.MAP_ID) != null,
-                Component.literal("Expected the finalized map to have a map id"));
+                !CommonLogic.isEmptyPendingMap(stack), "Expected the pending state to be cleared after finalizing");
+        helper.assertTrue(stack.get(DataComponents.MAP_ID) != null, "Expected the finalized map to have a map id");
         helper.succeed();
     }
 
@@ -190,7 +183,7 @@ public final class AsyncLocatorGameTestLogic {
         }
         Dolphin dolphin = helper.spawn(EntityType.DOLPHIN, new BlockPos(1, 2, 1));
         helper.runAfterDelay(20, () -> {
-            helper.assertTrue(dolphin.isAlive(), Component.literal("Expected the dolphin to still be alive"));
+            helper.assertTrue(dolphin.isAlive(), "Expected the dolphin to still be alive");
             helper.succeed();
         });
     }
