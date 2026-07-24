@@ -44,9 +44,10 @@ class SparkConfig {
      * @param path        The location of the config file
      * @param configClass The config class
      */
-    public static void read(Path path, Class<?> configClass) throws IOException, IllegalAccessException {
-        if (Files.notExists(path)) return;
+    public static boolean read(Path path, Class<?> configClass) throws IOException, IllegalAccessException {
+        if (Files.notExists(path)) return false;
         Map<EntryKey, Entry> entries = readEntries(path);
+        boolean missingEntries = false;
 
         List<ConfigField> configFields = getConfigFields(configClass);
         for (ConfigField configField : configFields) {
@@ -83,8 +84,12 @@ class SparkConfig {
                 }
 
                 field.set(null, newValue);
-            } else LOG.warn("Config '{}' has no value in file!", name);
+            } else {
+                LOG.warn("Config '{}' has no value in file; using its default value", name);
+                missingEntries = true;
+            }
         }
+        return missingEntries;
     }
 
     private static Map<EntryKey, Entry> readEntries(Path path) throws IOException {

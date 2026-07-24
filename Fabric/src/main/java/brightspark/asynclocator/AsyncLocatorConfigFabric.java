@@ -104,11 +104,10 @@ public class AsyncLocatorConfigFabric {
         if (Files.exists(configFile)) {
             ALConstants.logInfo("Config file found");
             try {
-                SparkConfig.read(configFile, AsyncLocatorConfigFabric.class);
+                resetToDefaults();
+                boolean needsRewrite = SparkConfig.read(configFile, AsyncLocatorConfigFabric.class);
 
                 // Validate values in case of manual edits
-                boolean needsRewrite = false;
-
                 if (MAX_CONCURRENT_LOCATES > MAX_MAX_CONCURRENT_LOCATES
                         || MAX_CONCURRENT_LOCATES < MIN_MAX_CONCURRENT_LOCATES) {
                     ALConstants.logError(
@@ -146,9 +145,9 @@ public class AsyncLocatorConfigFabric {
                 if (needsRewrite) {
                     try {
                         SparkConfig.write(configFile, AsyncLocatorConfigFabric.class);
-                        ALConstants.logInfo("Config file rewritten with default values");
+                        ALConstants.logInfo("Config file updated with missing or corrected values");
                     } catch (IOException | IllegalAccessException writeError) {
-                        ALConstants.logError(writeError, "Failed to rewrite config file");
+                        ALConstants.logError(writeError, "Failed to update config file");
                     }
                 }
 
