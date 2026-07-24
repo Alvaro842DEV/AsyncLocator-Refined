@@ -40,26 +40,25 @@ loom {
     runs {
         named("client") {
             client()
-            setConfigName("Fabric Client")
-            ideConfigGenerated(true)
-            runDir("run")
+            displayName.set("Fabric Client")
+            generateRunConfig.set(true)
+            runDirectory.set(layout.projectDirectory.dir("run"))
         }
         named("server") {
             server()
-            setConfigName("Fabric Server")
-            ideConfigGenerated(true)
-            runDir("run")
+            displayName.set("Fabric Server")
+            generateRunConfig.set(true)
+            runDirectory.set(layout.projectDirectory.dir("run"))
         }
         // Run with: ./gradlew :Fabric:runGametest
-        @Suppress("DEPRECATION")
         create("gametest") {
             server()
-            vmArg("-Dfabric-api.gametest")
-            vmArg(
+            jvmArguments.add("-Dfabric-api.gametest")
+            jvmArguments.add(
                 "-Dfabric-api.gametest.report-file=" +
                     layout.buildDirectory.file("gametest/junit.xml").get().asFile.absolutePath
             )
-            runDir("build/gametest")
+            runDirectory.set(layout.projectDirectory.dir("build/gametest"))
         }
     }
 }
