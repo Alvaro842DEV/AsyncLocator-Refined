@@ -21,7 +21,14 @@ dependencies {
     minecraft("com.mojang:minecraft:$minecraft_version")
     mappings(loom.officialMojangMappings())
     modImplementation("net.fabricmc:fabric-loader:$fabric_loader_version")
-    modImplementation("net.fabricmc.fabric-api:fabric-api:$fabric_version")
+    modImplementation("net.fabricmc.fabric-api:fabric-api:$fabric_version") {
+        isTransitive = false
+    }
+    modImplementation(fabricApi.module("fabric-lifecycle-events-v1", fabric_version))
+    modImplementation(fabricApi.module("fabric-gametest-api-v1", fabric_version))
+    testImplementation(platform("org.junit:junit-bom:5.13.4"))
+    testImplementation("org.junit.jupiter:junit-jupiter")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
 loom {
@@ -79,6 +86,10 @@ tasks.named<ProcessResources>("processResources") {
 
 tasks.withType<JavaCompile>().configureEach {
     source(commonMain.allSource)
+}
+
+tasks.test {
+    useJUnitPlatform()
 }
 
 publishing {
