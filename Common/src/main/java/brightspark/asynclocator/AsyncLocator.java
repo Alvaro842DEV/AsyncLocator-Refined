@@ -467,7 +467,7 @@ public class AsyncLocator {
          * This avoids callbacks firing before the caller has finished its setup
          */
         private void deferToServerThread(Runnable runnable) {
-            server.schedule(new TickTask(server.getTickCount(), runnable));
+            server.tell(new TickTask(server.getTickCount(), runnable));
         }
 
         /*
