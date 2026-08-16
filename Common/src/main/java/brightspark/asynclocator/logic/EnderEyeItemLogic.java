@@ -17,6 +17,7 @@ import net.minecraft.world.entity.projectile.EyeOfEnder;
 import net.minecraft.world.item.EnderEyeItem;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 
 public class EnderEyeItemLogic {
@@ -79,9 +80,14 @@ public class EnderEyeItemLogic {
             return;
         }
 
+        completeSuccessfulLocate(player, eyeOfEnder, enderEyeItem, pos);
+    }
+
+    public static void completeSuccessfulLocate(
+            Player player, EyeOfEnder eyeOfEnder, EnderEyeItem enderEyeItem, BlockPos pos) {
         ALConstants.logInfo("Location found - updating eye of ender entity");
-        eyeOfEnder.signalTo(pos);
-        if (!player.isRemoved() && player.level() == level) {
+        eyeOfEnder.signalTo(Vec3.atLowerCornerOf(pos));
+        if (!player.isRemoved() && player.level() == eyeOfEnder.level()) {
             if (player instanceof ServerPlayer serverPlayer) {
                 CriteriaTriggers.USED_ENDER_EYE.trigger(serverPlayer, pos);
             }

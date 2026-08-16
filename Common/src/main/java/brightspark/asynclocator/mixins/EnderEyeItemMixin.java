@@ -18,6 +18,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.levelgen.structure.Structure;
 import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.Vec3;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -83,9 +84,9 @@ public class EnderEyeItemMixin {
                     @At(
                             value = "INVOKE",
                             target =
-                                    "Lnet/minecraft/world/entity/projectile/EyeOfEnder;signalTo(Lnet/minecraft/core/BlockPos;)V"))
-    public void eyeOfEnderSignalTo(EyeOfEnder eyeOfEnder, BlockPos blockpos) {
-        if (!Services.CONFIG.eyeOfEnderEnabled()) eyeOfEnder.signalTo(blockpos);
+                                    "Lnet/minecraft/world/entity/projectile/EyeOfEnder;signalTo(Lnet/minecraft/world/phys/Vec3;)V"))
+    public void eyeOfEnderSignalTo(EyeOfEnder eyeOfEnder, Vec3 target) {
+        if (!Services.CONFIG.eyeOfEnderEnabled()) eyeOfEnder.signalTo(target);
         // Else do nothing - we'll do this later if a location is found
     }
 
