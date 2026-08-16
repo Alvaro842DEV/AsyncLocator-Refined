@@ -25,6 +25,14 @@ import net.minecraft.world.level.chunk.ChunkGenerator;
 import net.minecraft.world.level.levelgen.structure.Structure;
 
 public class AsyncLocator {
+    public record Status(
+            boolean executorActive,
+            int activeLocates,
+            int queuedLocates,
+            int maxConcurrentLocates,
+            int maxQueuedLocates,
+            int sharedLocates) {}
+
     /*
      * All executor state is guarded by the AsyncLocator.class monitor so
      * that a task submission can never race a concurrent shutdown
@@ -95,6 +103,23 @@ public class AsyncLocator {
     public static boolean isExecutorActive() {
         synchronized (AsyncLocator.class) {
             return LOCATING_EXECUTOR_SERVICE != null && !LOCATING_EXECUTOR_SERVICE.isShutdown();
+        }
+    }
+
+    public static Status status() {
+        synchronized (AsyncLocator.class) {
+            boolean executorActive = LOCATING_EXECUTOR_SERVICE != null && !LOCATING_EXECUTOR_SERVICE.isShutdown();
+            LocateTaskLimiter.Snapshot limiter = LOCATE_TASK_LIMITER == null
+                    ? new LocateTaskLimiter.Snapshot(
+                            0, 0, Services.CONFIG.maxConcurrentLocates(), Services.CONFIG.maxQueuedLocates())
+                    : LOCATE_TASK_LIMITER.snapshot();
+            return new Status(
+                    executorActive,
+                    limiter.active(),
+                    limiter.queued(),
+                    limiter.maxConcurrent(),
+                    limiter.maxQueued(),
+                    PENDING_LOCATES.size());
         }
     }
 
