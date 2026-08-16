@@ -42,9 +42,10 @@ public class AsyncLocator {
     private static boolean EXECUTOR_STOPPED = false;
     private static final AtomicInteger THREAD_COUNTER = new AtomicInteger(1);
 
-    private static final ConcurrentHashMap<LocateKey, CompletableFuture<?>> PENDING_LOCATES = new ConcurrentHashMap<>();
+    private static final ConcurrentHashMap<LocateKey, SharedLocate<?>> PENDING_LOCATES = new ConcurrentHashMap<>();
 
-    private record LocateKey(ResourceKey<Level> dimension, Object target, BlockPos pos, int searchRadius) {}
+    private record LocateKey(
+            MinecraftServer server, ResourceKey<Level> dimension, Object target, BlockPos pos, int searchRadius) {}
 
     private AsyncLocator() {}
 
@@ -76,12 +77,17 @@ public class AsyncLocator {
 
     public static void shutdownExecutorService() {
         ExecutorService executor;
+        List<SharedLocate<?>> pendingLocates;
         synchronized (AsyncLocator.class) {
             executor = LOCATING_EXECUTOR_SERVICE;
             LOCATING_EXECUTOR_SERVICE = null;
             LOCATE_TASK_LIMITER = null;
             EXECUTOR_STOPPED = true;
+            pendingLocates = List.copyOf(PENDING_LOCATES.values());
+            PENDING_LOCATES.clear();
         }
+
+        pendingLocates.forEach(SharedLocate::shutdown);
 
         if (executor == null) {
             return;
@@ -253,25 +259,29 @@ public class AsyncLocator {
     @SuppressWarnings("unchecked")
     private static <T> LocateTask<T> coalesced(
             ServerLevel level, Object target, BlockPos pos, int searchRadius, Supplier<LocateTask<T>> starter) {
-        LocateKey key = new LocateKey(level.dimension(), target, pos.immutable(), searchRadius);
-        CompletableFuture<T> placeholder = new CompletableFuture<>();
-        CompletableFuture<T> shared = (CompletableFuture<T>) PENDING_LOCATES.putIfAbsent(key, placeholder);
-        if (shared == null) {
-            shared = placeholder;
-            try {
-                CompletableFuture<T> base = starter.get().completableFuture();
-                base.whenComplete((result, throwable) -> {
-                    if (throwable == null) placeholder.complete(result);
-                    else placeholder.completeExceptionally(throwable);
-                    PENDING_LOCATES.remove(key, placeholder);
-                });
-            } catch (Throwable throwable) {
-                placeholder.completeExceptionally(throwable);
-                PENDING_LOCATES.remove(key, placeholder);
+        LocateKey key = new LocateKey(level.getServer(), level.dimension(), target, pos.immutable(), searchRadius);
+        while (true) {
+            SharedLocate<T> candidate = new SharedLocate<>(shared -> PENDING_LOCATES.remove(key, shared));
+            SharedLocate<T> shared = (SharedLocate<T>) PENDING_LOCATES.putIfAbsent(key, candidate);
+            boolean startsSearch = shared == null;
+            if (startsSearch) shared = candidate;
+
+            CompletableFuture<T> child = shared.subscribe();
+            if (child == null) {
+                PENDING_LOCATES.remove(key, shared);
+                continue;
             }
+            LocateTask<T> subscription = new LocateTask<>(level.getServer(), child, child);
+
+            if (!startsSearch) return subscription;
+
+            try {
+                shared.connect(starter.get());
+            } catch (Throwable throwable) {
+                shared.fail(throwable);
+            }
+            return subscription;
         }
-        CompletableFuture<T> child = shared.copy();
-        return new LocateTask<>(level.getServer(), child, child);
     }
 
     private static void doLocateLevel(
