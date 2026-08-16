@@ -1,9 +1,16 @@
 package brightspark.asynclocator;
 
+import com.electronwill.nightconfig.core.CommentedConfig;
+import com.electronwill.nightconfig.core.concurrent.ConcurrentCommentedConfig;
+import com.electronwill.nightconfig.toml.TomlParser;
+import java.io.IOException;
+import java.nio.file.Files;
+import net.neoforged.fml.config.ModConfig;
 import net.neoforged.neoforge.common.ModConfigSpec;
 import net.neoforged.neoforge.common.ModConfigSpec.ConfigValue;
 
 public class AsyncLocatorConfigNeoForge {
+    private static volatile ModConfig loadedConfig;
 
     private static final int DEFAULT_MAX_CONCURRENT_LOCATES = 2;
     private static final int MIN_MAX_CONCURRENT_LOCATES = 1;
@@ -99,5 +106,77 @@ public class AsyncLocatorConfigNeoForge {
             SPEC.save();
             ALConstants.logInfo("Config values corrected and saved");
         }
+    }
+
+    public static void setLoadedConfig(ModConfig modConfig) {
+        loadedConfig = modConfig;
+    }
+
+    public static void reload() throws IOException {
+        ModConfig modConfig = loadedConfig;
+        if (modConfig == null) {
+            throw new IllegalStateException("NeoForge config has not finished loading");
+        }
+        if (modConfig.getFullPath() == null || modConfig.getLoadedConfig() == null) {
+            throw new IllegalStateException("NeoForge config is not loaded from a file");
+        }
+
+        CommentedConfig parsed;
+        try (var reader = Files.newBufferedReader(modConfig.getFullPath())) {
+            parsed = new TomlParser().parse(reader);
+        }
+        validateValues(parsed);
+        if (!SPEC.isCorrect(parsed)) {
+            ALConstants.logWarn("Config file has missing values or outdated metadata; updating it");
+            SPEC.correct(parsed);
+        }
+
+        var current = modConfig.getLoadedConfig().config();
+        if (current instanceof ConcurrentCommentedConfig concurrent) {
+            concurrent.bulkCommentedUpdate(
+                    (java.util.function.Consumer<CommentedConfig>) config -> replace(config, parsed));
+        } else {
+            replace(current, parsed);
+        }
+        SPEC.acceptConfig(modConfig.getLoadedConfig());
+        modConfig.getLoadedConfig().save();
+    }
+
+    private static void validateValues(CommentedConfig config) {
+        validateInteger(config, "maxConcurrentLocates", MIN_MAX_CONCURRENT_LOCATES, MAX_MAX_CONCURRENT_LOCATES);
+        validateInteger(config, "maxQueuedLocates", MIN_MAX_QUEUED_LOCATES, MAX_MAX_QUEUED_LOCATES);
+        validateInteger(config, "biomeSearchRadius", MIN_BIOME_RADIUS, MAX_BIOME_RADIUS);
+        validateBoolean(config, "removeMerchantInvalidMapOffer");
+        validateBoolean(config, "Feature Toggles.dolphinTreasureEnabled");
+        validateBoolean(config, "Feature Toggles.eyeOfEnderEnabled");
+        validateBoolean(config, "Feature Toggles.explorationMapEnabled");
+        validateBoolean(config, "Feature Toggles.locateCommandEnabled");
+        validateBoolean(config, "Feature Toggles.locateBiomeCommandEnabled");
+        validateBoolean(config, "Feature Toggles.villagerTradeEnabled");
+    }
+
+    private static void validateInteger(CommentedConfig config, String path, int minimum, int maximum) {
+        Object value = config.get(path);
+        if (value == null) return;
+        if (value instanceof Byte || value instanceof Short || value instanceof Integer || value instanceof Long) {
+            Number number = (Number) value;
+            long integer = number.longValue();
+            if (integer >= minimum && integer <= maximum) return;
+        }
+        throw new IllegalArgumentException("Invalid " + path + " value (" + value + "). Must be an integer between "
+                + minimum + " and " + maximum);
+    }
+
+    private static void validateBoolean(CommentedConfig config, String path) {
+        Object value = config.get(path);
+        if (value == null || value instanceof Boolean) return;
+        throw new IllegalArgumentException("Invalid " + path + " value (" + value + "). Must be true or false");
+    }
+
+    private static void replace(CommentedConfig target, CommentedConfig source) {
+        target.clear();
+        target.clearComments();
+        target.putAll(source);
+        target.putAllComments(source);
     }
 }
