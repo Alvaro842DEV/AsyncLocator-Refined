@@ -3,13 +3,21 @@ package brightspark.asynclocator.gametest;
 import brightspark.asynclocator.AsyncLocator;
 import brightspark.asynclocator.logic.CommonLogic;
 import brightspark.asynclocator.logic.EnderEyeItemLogic;
+import brightspark.asynclocator.logic.EyeOfEnderData;
 import brightspark.asynclocator.logic.MerchantLogic;
+import brightspark.asynclocator.platform.Services;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
+import net.minecraft.ChatFormatting;
+import net.minecraft.commands.CommandSource;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.TextColor;
 import net.minecraft.tags.StructureTags;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.animal.Dolphin;
@@ -26,6 +34,7 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.ChestBlockEntity;
 import net.minecraft.world.level.saveddata.maps.MapDecorationTypes;
 import net.minecraft.world.level.storage.loot.BuiltInLootTables;
+import net.minecraft.world.phys.Vec3;
 
 /**
  * Game test worlds are superflat with structure generation disabled, so
@@ -37,9 +46,89 @@ public final class AsyncLocatorGameTestLogic {
     // Structure template shared by both loaders: data/asynclocator/structure/empty.nbt
     public static final String EMPTY_STRUCTURE = "asynclocator:empty";
 
-    public static final int MAX_TICKS = 200;
+    public static final int MAX_TICKS = 600;
 
     private AsyncLocatorGameTestLogic() {}
+
+    public static void statusAndReloadCommandsExecute(GameTestHelper helper, Path configFile) {
+        var server = helper.getLevel().getServer();
+        var dispatcher = server.getCommands().getDispatcher();
+        var source = server.createCommandSourceStack();
+
+        try {
+            helper.assertTrue(
+                    dispatcher.execute("asynclocator status", source) == 1,
+                    Component.literal("Expected /asynclocator status to succeed"));
+            int originalMaxQueued = Services.CONFIG.maxQueuedLocates();
+            int reloadedMaxQueued = originalMaxQueued == 127 ? 128 : 127;
+            String originalConfig = Files.readString(configFile);
+            String editedConfig =
+                    originalConfig.replaceFirst("(?m)^(\\s*maxQueuedLocates\\s*=\\s*)\\d+", "$1" + reloadedMaxQueued);
+            helper.assertFalse(
+                    originalConfig.equals(editedConfig), Component.literal("Could not edit maxQueuedLocates"));
+
+            try {
+                Files.writeString(configFile, editedConfig);
+                helper.assertTrue(
+                        dispatcher.execute("asynclocator reload", source) == 1,
+                        Component.literal("Expected /asynclocator reload to succeed"));
+                helper.assertTrue(
+                        Services.CONFIG.maxQueuedLocates() == reloadedMaxQueued,
+                        Component.literal("Reload did not apply maxQueuedLocates"));
+            } finally {
+                Files.writeString(configFile, originalConfig);
+                dispatcher.execute("asynclocator reload", source);
+            }
+            helper.assertTrue(
+                    Services.CONFIG.maxQueuedLocates() == originalMaxQueued,
+                    Component.literal("Reload did not restore maxQueuedLocates"));
+
+            String invalidConfig =
+                    originalConfig.replaceFirst("(?m)^(\\s*maxQueuedLocates\\s*=\\s*)\\d+", "$1" + Integer.MAX_VALUE);
+            helper.assertFalse(
+                    originalConfig.equals(invalidConfig), Component.literal("Could not make maxQueuedLocates invalid"));
+            try {
+                Files.writeString(configFile, invalidConfig);
+                helper.assertTrue(
+                        dispatcher.execute("asynclocator reload", source) == 0,
+                        Component.literal("Expected reload to reject an out-of-range value"));
+                helper.assertTrue(
+                        Services.CONFIG.maxQueuedLocates() == originalMaxQueued,
+                        Component.literal("Invalid reload changed the active maxQueuedLocates"));
+            } finally {
+                Files.writeString(configFile, originalConfig);
+                dispatcher.execute("asynclocator reload", source);
+            }
+            helper.assertTrue(
+                    Services.CONFIG.maxQueuedLocates() == originalMaxQueued,
+                    Component.literal("Reload did not restore config after invalid-value test"));
+
+            boolean originalDolphinToggle = Services.CONFIG.dolphinTreasureEnabled();
+            String invalidBooleanConfig = originalConfig.replaceFirst(
+                    "(?m)^(\\s*dolphinTreasureEnabled\\s*=\\s*)(true|false)", "$1\"not-a-boolean\"");
+            helper.assertFalse(
+                    originalConfig.equals(invalidBooleanConfig),
+                    Component.literal("Could not make dolphinTreasureEnabled invalid"));
+            try {
+                Files.writeString(configFile, invalidBooleanConfig);
+                helper.assertTrue(
+                        dispatcher.execute("asynclocator reload", source) == 0,
+                        Component.literal("Expected reload to reject a malformed boolean"));
+                helper.assertTrue(
+                        Services.CONFIG.dolphinTreasureEnabled() == originalDolphinToggle,
+                        Component.literal("Invalid reload changed the active dolphinTreasureEnabled value"));
+            } finally {
+                Files.writeString(configFile, originalConfig);
+                dispatcher.execute("asynclocator reload", source);
+            }
+            helper.assertTrue(
+                    dispatcher.execute("al status", source) == 1,
+                    Component.literal("Expected the /al shortcut to execute Async Locator status"));
+            helper.succeed();
+        } catch (Exception exception) {
+            helper.fail(Component.literal("Async Locator command failed: " + exception.getMessage()));
+        }
+    }
 
     public static void structureLocateCompletes(GameTestHelper helper) {
         AtomicBoolean completed = new AtomicBoolean();
@@ -158,6 +247,85 @@ public final class AsyncLocatorGameTestLogic {
             helper.assertEntityNotPresent(EntityType.EYE_OF_ENDER);
             helper.assertItemEntityPresent(Items.ENDER_EYE, new BlockPos(1, 2, 1), 3.0);
         });
+    }
+
+    public static void eyeOfEnderSuccessfulResultSignalsToBlockPosition(GameTestHelper helper) {
+        Player player = helper.makeMockPlayer(GameType.SURVIVAL);
+        EyeOfEnder eye = helper.spawn(EntityType.EYE_OF_ENDER, new BlockPos(1, 3, 1));
+        BlockPos target = eye.blockPosition().offset(4, 2, 3);
+
+        EnderEyeItemLogic.completeSuccessfulLocate(player, eye, (EnderEyeItem) Items.ENDER_EYE, target);
+
+        helper.assertTrue(
+                Vec3.atLowerCornerOf(target).equals(((EyeOfEnderData) eye).getSignalTarget()),
+                Component.literal("Expected the eye target to be the lower-corner Vec3 of the located BlockPos"));
+        helper.succeed();
+    }
+
+    public static void locateCommandsCompleteAsynchronously(GameTestHelper helper) {
+        var server = helper.getLevel().getServer();
+        var dispatcher = server.getCommands().getDispatcher();
+        AtomicReference<Component> structureResponse = new AtomicReference<>();
+        AtomicReference<Component> biomeResponse = new AtomicReference<>();
+
+        try {
+            int structureResult = dispatcher.execute(
+                    "locate structure #minecraft:eye_of_ender_located",
+                    server.createCommandSourceStack()
+                            .withLevel(helper.getLevel())
+                            .withPosition(Vec3.atCenterOf(helper.absolutePos(new BlockPos(1, 1, 1))))
+                            .withSource(messageCollector(structureResponse)));
+            int biomeResult = dispatcher.execute(
+                    "locate biome minecraft:plains",
+                    server.createCommandSourceStack()
+                            .withLevel(helper.getLevel())
+                            .withPosition(Vec3.atCenterOf(helper.absolutePos(new BlockPos(1, 1, 1))))
+                            .withSource(messageCollector(biomeResponse)));
+            helper.assertTrue(structureResult == 1, Component.literal("Structure command was not accepted"));
+            helper.assertTrue(biomeResult == 1, Component.literal("Biome command was not accepted"));
+        } catch (Exception exception) {
+            helper.fail(Component.literal("Locate command failed to start: " + exception.getMessage()));
+            return;
+        }
+
+        helper.succeedWhen(() -> {
+            Component structureMessage = structureResponse.get();
+            Component biomeMessage = biomeResponse.get();
+            helper.assertTrue(structureMessage != null, Component.literal("Structure locate sent no completion"));
+            helper.assertTrue(biomeMessage != null, Component.literal("Biome locate sent no completion"));
+            helper.assertTrue(
+                    TextColor.fromLegacyFormat(ChatFormatting.RED)
+                            .equals(structureMessage.getStyle().getColor()),
+                    Component.literal("Expected the unavailable structure to report failure"));
+            helper.assertFalse(
+                    TextColor.fromLegacyFormat(ChatFormatting.RED)
+                            .equals(biomeMessage.getStyle().getColor()),
+                    Component.literal("Expected plains biome locate to report success"));
+        });
+    }
+
+    private static CommandSource messageCollector(AtomicReference<Component> response) {
+        return new CommandSource() {
+            @Override
+            public void sendSystemMessage(Component message) {
+                response.set(message);
+            }
+
+            @Override
+            public boolean acceptsSuccess() {
+                return true;
+            }
+
+            @Override
+            public boolean acceptsFailure() {
+                return true;
+            }
+
+            @Override
+            public boolean shouldInformAdmins() {
+                return false;
+            }
+        };
     }
 
     public static void finalizeMapProducesUsableMap(GameTestHelper helper) {
