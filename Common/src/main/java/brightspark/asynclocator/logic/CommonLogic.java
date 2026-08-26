@@ -89,19 +89,11 @@ public class CommonLogic {
         return stack;
     }
 
-    // This way it will render correctly in the GUI
+    // Only assign a map ID after a successful locate to avoid dead/unused map files
     public static ItemStack createMerchantMap(ServerLevel level) {
         ItemStack stack = new ItemStack(Items.FILLED_MAP);
-
-        MapItemSavedData mapData = MapItemSavedData.createFresh(0, 0, (byte) 2, true, true, level.dimension());
-
-        MapId newMapId = level.getFreeMapId();
-        stack.set(DataComponents.MAP_ID, newMapId);
-        level.setMapData(newMapId, mapData);
-
         stack.set(DataComponents.ITEM_NAME, Component.translatable(MAP_HOVER_NAME_KEY));
         markPending(stack, null);
-
         return stack;
     }
 

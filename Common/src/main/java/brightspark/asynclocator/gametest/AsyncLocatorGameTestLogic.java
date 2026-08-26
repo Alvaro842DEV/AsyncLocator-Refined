@@ -203,6 +203,9 @@ public final class AsyncLocatorGameTestLogic {
 
         helper.assertTrue(
                 containsPendingMap(chest), Component.literal("Expected a pending map right after loot generation"));
+        helper.assertFalse(
+                containsPendingMapWithId(chest),
+                Component.literal("Pending exploration map unexpectedly allocated persistent map data"));
 
         helper.succeedWhen(() -> helper.assertTrue(
                 containsItem(chest, Items.MAP) && !containsPendingMap(chest),
@@ -225,6 +228,9 @@ public final class AsyncLocatorGameTestLogic {
         helper.assertTrue(
                 CommonLogic.isEmptyPendingMap(offer.getResult()),
                 Component.literal("Expected the offer result to start as a pending map"));
+        helper.assertTrue(
+                offer.getResult().get(DataComponents.MAP_ID) == null,
+                Component.literal("Pending merchant map unexpectedly allocated persistent map data"));
         villager.getOffers().add(offer);
 
         helper.succeedWhen(() -> helper.assertTrue(
@@ -332,6 +338,9 @@ public final class AsyncLocatorGameTestLogic {
         ItemStack stack = CommonLogic.createManagedMap();
         helper.assertTrue(
                 CommonLogic.isEmptyPendingMap(stack), Component.literal("Expected a fresh managed map to be pending"));
+        helper.assertTrue(
+                stack.get(DataComponents.MAP_ID) == null,
+                Component.literal("Pending managed map unexpectedly allocated persistent map data"));
 
         CommonLogic.finalizeMap(
                 stack,
@@ -347,6 +356,9 @@ public final class AsyncLocatorGameTestLogic {
         helper.assertTrue(
                 stack.get(DataComponents.MAP_ID) != null,
                 Component.literal("Expected the finalized map to have a map id"));
+        helper.assertTrue(
+                helper.getLevel().getMapData(stack.get(DataComponents.MAP_ID)) != null,
+                Component.literal("Expected the finalized map id to resolve to saved map data"));
         helper.succeed();
     }
 
@@ -366,6 +378,16 @@ public final class AsyncLocatorGameTestLogic {
     private static boolean containsPendingMap(ChestBlockEntity chest) {
         for (int i = 0; i < chest.getContainerSize(); i++) {
             if (CommonLogic.isEmptyPendingMap(chest.getItem(i))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean containsPendingMapWithId(ChestBlockEntity chest) {
+        for (int i = 0; i < chest.getContainerSize(); i++) {
+            ItemStack stack = chest.getItem(i);
+            if (CommonLogic.isEmptyPendingMap(stack) && stack.get(DataComponents.MAP_ID) != null) {
                 return true;
             }
         }
