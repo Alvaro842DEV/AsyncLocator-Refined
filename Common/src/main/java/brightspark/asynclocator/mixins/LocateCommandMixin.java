@@ -3,11 +3,11 @@ package brightspark.asynclocator.mixins;
 import brightspark.asynclocator.ALConstants;
 import brightspark.asynclocator.logic.LocateCommandLogic;
 import brightspark.asynclocator.platform.Services;
+import com.llamalad7.mixinextras.sugar.Local;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.arguments.ResourceOrTagArgument;
 import net.minecraft.commands.arguments.ResourceOrTagKeyArgument;
 import net.minecraft.core.HolderSet;
-import net.minecraft.core.Registry;
 import net.minecraft.server.commands.LocateCommand;
 import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.levelgen.structure.Structure;
@@ -15,7 +15,6 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
-import org.spongepowered.asm.mixin.injection.callback.LocalCapture;
 
 @Mixin(LocateCommand.class)
 public class LocateCommandMixin {
@@ -26,14 +25,12 @@ public class LocateCommandMixin {
                             value = "INVOKE",
                             target =
                                     "Lnet/minecraft/world/level/chunk/ChunkGenerator;findNearestMapStructure(Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/core/HolderSet;Lnet/minecraft/core/BlockPos;IZ)Lcom/mojang/datafixers/util/Pair;"),
-            cancellable = true,
-            locals = LocalCapture.CAPTURE_FAILSOFT)
+            cancellable = true)
     private static void findLocationAsync(
             CommandSourceStack sourceStack,
             ResourceOrTagKeyArgument.Result<Structure> structureResult,
             CallbackInfoReturnable<Integer> cir,
-            Registry<Structure> registry,
-            HolderSet<Structure> holderset) {
+            @Local HolderSet<Structure> holderset) {
         if (!Services.CONFIG.locateCommandEnabled()) return;
 
         ALConstants.logDebug("Intercepted LocateCommand#locate call");
