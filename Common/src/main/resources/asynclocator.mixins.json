@@ -16,7 +16,6 @@
     "LocateCommandAccess",
     "LocateCommandMixin",
     "MerchantOfferAccess",
-    "SetNameFunctionAccessor",
     "SetNameFunctionMixin",
     "SlotMixin",
     "StructureCheckMixin",
