@@ -2,6 +2,9 @@
   "required": true,
   "package": "brightspark.asynclocator.mixins",
   "compatibilityLevel": "JAVA_21",
+  "mixinextras": {
+    "minVersion": "0.5.1"
+  },
   "mixins": [
     "ChunkGeneratorMixin",
     "DolphinAccessor",
