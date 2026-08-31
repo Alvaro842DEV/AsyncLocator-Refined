@@ -41,6 +41,8 @@ public final class AsyncLocatorNeoForgeGameTests {
         tests.put(
                 "eye_of_ender_success_signals_to_block_position",
                 AsyncLocatorGameTestLogic::eyeOfEnderSuccessfulResultSignalsToBlockPosition);
+        tests.put("pending_map_name_write_is_deferred", AsyncLocatorGameTestLogic::pendingMapNameWriteIsDeferred);
+        tests.put("pending_map_cannot_be_picked_up", AsyncLocatorGameTestLogic::pendingMapCannotBePickedUp);
         tests.put("locate_commands_complete_async", AsyncLocatorGameTestLogic::locateCommandsCompleteAsynchronously);
         tests.put("finalize_map_produces_usable_map", AsyncLocatorGameTestLogic::finalizeMapProducesUsableMap);
         tests.put("dolphin_survives_ticking", AsyncLocatorGameTestLogic::dolphinSurvivesTicking);

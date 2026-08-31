@@ -50,6 +50,16 @@ public final class AsyncLocatorFabricGameTests {
     }
 
     @GameTest(structure = EMPTY_STRUCTURE, maxTicks = MAX_TICKS)
+    public void pendingMapNameWriteIsDeferred(GameTestHelper helper) {
+        AsyncLocatorGameTestLogic.pendingMapNameWriteIsDeferred(helper);
+    }
+
+    @GameTest(structure = EMPTY_STRUCTURE, maxTicks = MAX_TICKS)
+    public void pendingMapCannotBePickedUp(GameTestHelper helper) {
+        AsyncLocatorGameTestLogic.pendingMapCannotBePickedUp(helper);
+    }
+
+    @GameTest(structure = EMPTY_STRUCTURE, maxTicks = MAX_TICKS)
     public void locateCommandsCompleteAsynchronously(GameTestHelper helper) {
         AsyncLocatorGameTestLogic.locateCommandsCompleteAsynchronously(helper);
     }
