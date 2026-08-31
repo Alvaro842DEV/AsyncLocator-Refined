@@ -47,12 +47,15 @@ class LocateTaskLimiterTest {
             assertFalse(limiter.tryAdmit());
             assertTrue(activeTasks.await(5, TimeUnit.SECONDS));
             assertEquals(2, maximumRunning.get());
+            assertEquals(new LocateTaskLimiter.Snapshot(2, 2, 2, 2), limiter.snapshot());
             releaseTasks.countDown();
 
             for (FutureTask<Void> task : tasks) {
                 task.get(5, TimeUnit.SECONDS);
             }
         }
+
+        assertEquals(new LocateTaskLimiter.Snapshot(0, 0, 2, 2), limiter.snapshot());
 
         assertTrue(limiter.tryAdmit());
         FutureTask<Void> cleanup = limiter.createTask(new CompletableFuture<>(), () -> {});

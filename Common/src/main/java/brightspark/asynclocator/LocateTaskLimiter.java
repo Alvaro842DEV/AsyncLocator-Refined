@@ -7,6 +7,8 @@ import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
 
 final class LocateTaskLimiter {
+    record Snapshot(int active, int queued, int maxConcurrent, int maxQueued) {}
+
     private final ReentrantLock lock = new ReentrantLock(true);
     private final Condition capacityAvailable = lock.newCondition();
 
@@ -46,6 +48,15 @@ final class LocateTaskLimiter {
 
     FutureTask<Void> createTask(CompletableFuture<?> result, Runnable task) {
         return new AdmittedTask(result, task);
+    }
+
+    Snapshot snapshot() {
+        lock.lock();
+        try {
+            return new Snapshot(active, admitted - active, maxConcurrent, maxQueued);
+        } finally {
+            lock.unlock();
+        }
     }
 
     private void acquireCapacity() throws InterruptedException {

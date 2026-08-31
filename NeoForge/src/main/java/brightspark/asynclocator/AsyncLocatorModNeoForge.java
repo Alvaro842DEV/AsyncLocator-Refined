@@ -7,12 +7,12 @@ import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.config.ModConfig;
 import net.neoforged.fml.event.config.ModConfigEvent;
 import net.neoforged.neoforge.common.NeoForge;
+import net.neoforged.neoforge.event.RegisterCommandsEvent;
 import net.neoforged.neoforge.event.server.ServerAboutToStartEvent;
 import net.neoforged.neoforge.event.server.ServerStoppingEvent;
 
 @Mod(ALConstants.MOD_ID)
 public class AsyncLocatorModNeoForge {
-
     public AsyncLocatorModNeoForge(IEventBus modEventBus, ModContainer modContainer) {
 
         modContainer.registerConfig(
@@ -20,6 +20,7 @@ public class AsyncLocatorModNeoForge {
 
         modEventBus.addListener((ModConfigEvent.Loading event) -> {
             if (event.getConfig().getSpec() == AsyncLocatorConfigNeoForge.SPEC) {
+                AsyncLocatorConfigNeoForge.setLoadedConfig(event.getConfig());
                 AsyncLocatorConfigNeoForge.validateConfig();
                 AsyncLocatorModCommon.printConfigs();
             }
@@ -29,6 +30,7 @@ public class AsyncLocatorModNeoForge {
         // would disrupt in-flight locate tasks
         modEventBus.addListener((ModConfigEvent.Reloading event) -> {
             if (event.getConfig().getSpec() == AsyncLocatorConfigNeoForge.SPEC) {
+                AsyncLocatorConfigNeoForge.setLoadedConfig(event.getConfig());
                 ALConstants.logInfo("Config reloaded");
                 AsyncLocatorConfigNeoForge.validateConfig();
                 AsyncLocator.updateLocateLimitsFromConfig();
@@ -40,6 +42,8 @@ public class AsyncLocatorModNeoForge {
         modEventBus.addListener(AsyncLocatorNeoForgeGameTests::registerTestInstances);
 
         IEventBus neoforgeEventBus = NeoForge.EVENT_BUS;
+        neoforgeEventBus.addListener((RegisterCommandsEvent event) ->
+                AsyncLocatorCommands.register(event.getDispatcher(), AsyncLocatorConfigNeoForge::reload));
         neoforgeEventBus.addListener((ServerAboutToStartEvent event) -> AsyncLocator.setupExecutorService());
         neoforgeEventBus.addListener((ServerStoppingEvent event) -> AsyncLocator.shutdownExecutorService());
     }

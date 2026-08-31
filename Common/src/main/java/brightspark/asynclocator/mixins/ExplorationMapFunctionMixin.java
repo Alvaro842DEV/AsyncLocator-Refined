@@ -9,7 +9,6 @@ import brightspark.asynclocator.platform.Services;
 import java.util.UUID;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
-import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.TagKey;
@@ -17,8 +16,6 @@ import net.minecraft.world.entity.npc.AbstractVillager;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.levelgen.structure.Structure;
 import net.minecraft.world.level.saveddata.maps.MapDecorationType;
-import net.minecraft.world.level.saveddata.maps.MapId;
-import net.minecraft.world.level.saveddata.maps.MapItemSavedData;
 import net.minecraft.world.level.storage.loot.LootContext;
 import net.minecraft.world.level.storage.loot.functions.ExplorationMapFunction;
 import net.minecraft.world.level.storage.loot.parameters.LootContextParams;
@@ -72,15 +69,8 @@ public abstract class ExplorationMapFunctionMixin {
 
         ALConstants.logDebug("Intercepting exploration map creation for {}.", destination.location());
 
-        MapItemSavedData mapData = MapItemSavedData.createFresh(
-                originPos.getX(), originPos.getZ(), this.zoom, false, false, serverLevel.dimension());
-        MapId newMapId = serverLevel.getFreeMapId();
-        serverLevel.setMapData(newMapId, mapData);
-
         ItemStack pendingMapStack = CommonLogic.createManagedMap();
-        pendingMapStack.set(DataComponents.MAP_ID, newMapId);
         CommonLogic.LootrTarget lootrTarget = CommonLogic.getActiveLootrTarget();
-        ALConstants.logDebug("Assigned MapId {} to exploration map ItemStack.", newMapId);
 
         AsyncLocator.locate(serverLevel, destination, originPos, searchRadius, skipKnownStructures)
                 .handleOnServerThread((foundPos, throwable) -> {

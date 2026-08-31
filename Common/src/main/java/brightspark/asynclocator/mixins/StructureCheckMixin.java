@@ -1,5 +1,7 @@
 package brightspark.asynclocator.mixins;
 
+import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
+import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import java.util.Map;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.levelgen.structure.Structure;
@@ -8,10 +10,6 @@ import net.minecraft.world.level.levelgen.structure.StructureCheckResult;
 import net.minecraft.world.level.levelgen.structure.StructureStart;
 import net.minecraft.world.level.levelgen.structure.placement.StructurePlacement;
 import org.spongepowered.asm.mixin.Mixin;
-import org.spongepowered.asm.mixin.injection.At;
-import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 /**
  * Vanilla confines {@code StructureCheck} to the main server thread because its caches are plain
@@ -22,36 +20,31 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
  */
 @Mixin(StructureCheck.class)
 public abstract class StructureCheckMixin {
-    @Inject(method = "checkStart", at = @At("HEAD"), cancellable = true)
-    private void asynclocator$synchronizeCheckStart(
+    @WrapMethod(method = "checkStart")
+    private StructureCheckResult asynclocator$synchronizeCheckStart(
             ChunkPos chunkPos,
             Structure structure,
             StructurePlacement placement,
             boolean skipKnownStructures,
-            CallbackInfoReturnable<StructureCheckResult> cir) {
-        if (Thread.holdsLock(this)) return;
+            Operation<StructureCheckResult> original) {
         synchronized (this) {
-            cir.setReturnValue(
-                    ((StructureCheck) (Object) this).checkStart(chunkPos, structure, placement, skipKnownStructures));
+            return original.call(chunkPos, structure, placement, skipKnownStructures);
         }
     }
 
-    @Inject(method = "onStructureLoad", at = @At("HEAD"), cancellable = true)
+    @WrapMethod(method = "onStructureLoad")
     private void asynclocator$synchronizeOnStructureLoad(
-            ChunkPos chunkPos, Map<Structure, StructureStart> structureStarts, CallbackInfo ci) {
-        if (Thread.holdsLock(this)) return;
+            ChunkPos chunkPos, Map<Structure, StructureStart> structureStarts, Operation<Void> original) {
         synchronized (this) {
-            ((StructureCheck) (Object) this).onStructureLoad(chunkPos, structureStarts);
+            original.call(chunkPos, structureStarts);
         }
-        ci.cancel();
     }
 
-    @Inject(method = "incrementReference", at = @At("HEAD"), cancellable = true)
-    private void asynclocator$synchronizeIncrementReference(ChunkPos chunkPos, Structure structure, CallbackInfo ci) {
-        if (Thread.holdsLock(this)) return;
+    @WrapMethod(method = "incrementReference")
+    private void asynclocator$synchronizeIncrementReference(
+            ChunkPos chunkPos, Structure structure, Operation<Void> original) {
         synchronized (this) {
-            ((StructureCheck) (Object) this).incrementReference(chunkPos, structure);
+            original.call(chunkPos, structure);
         }
-        ci.cancel();
     }
 }

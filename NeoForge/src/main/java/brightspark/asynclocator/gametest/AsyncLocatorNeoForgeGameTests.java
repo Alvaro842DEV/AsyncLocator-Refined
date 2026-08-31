@@ -12,6 +12,7 @@ import net.minecraft.gametest.framework.TestData;
 import net.minecraft.gametest.framework.TestEnvironmentDefinition;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
+import net.neoforged.fml.loading.FMLPaths;
 import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 import net.neoforged.neoforge.gametest.GameTestHooks;
 import net.neoforged.neoforge.registries.RegisterEvent;
@@ -25,6 +26,10 @@ public final class AsyncLocatorNeoForgeGameTests {
 
     private static Map<String, Consumer<GameTestHelper>> buildTests() {
         Map<String, Consumer<GameTestHelper>> tests = new LinkedHashMap<>();
+        tests.put(
+                "status_and_reload_commands_execute",
+                helper -> AsyncLocatorGameTestLogic.statusAndReloadCommandsExecute(
+                        helper, FMLPaths.CONFIGDIR.get().resolve("asynclocator.toml")));
         tests.put("structure_locate_completes", AsyncLocatorGameTestLogic::structureLocateCompletes);
         tests.put(
                 "coalesced_locate_survives_sibling_cancel",
@@ -33,6 +38,12 @@ public final class AsyncLocatorNeoForgeGameTests {
         tests.put("exploration_map_invalidates", AsyncLocatorGameTestLogic::explorationMapInvalidatesWhenNothingFound);
         tests.put("merchant_map_invalidates", AsyncLocatorGameTestLogic::merchantMapInvalidatesWhenNothingFound);
         tests.put("eye_of_ender_refunds", AsyncLocatorGameTestLogic::eyeOfEnderRefundsWhenNothingFound);
+        tests.put(
+                "eye_of_ender_success_signals_to_block_position",
+                AsyncLocatorGameTestLogic::eyeOfEnderSuccessfulResultSignalsToBlockPosition);
+        tests.put("pending_map_name_write_is_deferred", AsyncLocatorGameTestLogic::pendingMapNameWriteIsDeferred);
+        tests.put("pending_map_cannot_be_picked_up", AsyncLocatorGameTestLogic::pendingMapCannotBePickedUp);
+        tests.put("locate_commands_complete_async", AsyncLocatorGameTestLogic::locateCommandsCompleteAsynchronously);
         tests.put("finalize_map_produces_usable_map", AsyncLocatorGameTestLogic::finalizeMapProducesUsableMap);
         tests.put("dolphin_survives_ticking", AsyncLocatorGameTestLogic::dolphinSurvivesTicking);
         return tests;

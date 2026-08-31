@@ -4,6 +4,9 @@ import brightspark.asynclocator.ALConstants;
 import brightspark.asynclocator.AsyncLocator;
 import brightspark.asynclocator.AsyncLocator.LocateTask;
 import brightspark.asynclocator.platform.Services;
+import com.llamalad7.mixinextras.injector.ModifyReturnValue;
+import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
+import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import java.util.concurrent.CancellationException;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
@@ -16,9 +19,7 @@ import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 @Mixin(targets = "net.minecraft.world.entity.animal.Dolphin$DolphinSwimToTreasureGoal", priority = 800)
 public class DolphinSwimToTreasureGoalMixin {
@@ -29,7 +30,7 @@ public class DolphinSwimToTreasureGoalMixin {
     @Final
     private Dolphin dolphin;
 
-    @Redirect(
+    @WrapOperation(
             method = "start",
             at =
                     @At(
@@ -41,10 +42,11 @@ public class DolphinSwimToTreasureGoalMixin {
             net.minecraft.tags.TagKey<net.minecraft.world.level.levelgen.structure.Structure> structureTag,
             BlockPos pos,
             int searchRadius,
-            boolean skipKnownStructures) {
+            boolean skipKnownStructures,
+            Operation<BlockPos> original) {
         if (!Services.CONFIG.dolphinTreasureEnabled()) {
             // If disabled, use vanilla behavior
-            return level.findNearestMapStructure(structureTag, pos, searchRadius, skipKnownStructures);
+            return original.call(level, structureTag, pos, searchRadius, skipKnownStructures);
         }
 
         ALConstants.logDebug("Intercepted DolphinSwimToTreasureGoal findNearestMapStructure call");
@@ -62,11 +64,9 @@ public class DolphinSwimToTreasureGoalMixin {
     }
 
     // Keep goal alive while an async locating task is ongoing
-    @Inject(method = "canContinueToUse", at = @At(value = "HEAD"), cancellable = true)
-    public void continueToUseIfLocatingTreasure(CallbackInfoReturnable<Boolean> cir) {
-        if (locateTask != null && this.dolphin.gotFish() && this.dolphin.getAirSupply() >= 100) {
-            cir.setReturnValue(true);
-        }
+    @ModifyReturnValue(method = "canContinueToUse", at = @At("RETURN"))
+    private boolean continueToUseIfLocatingTreasure(boolean original) {
+        return original || (locateTask != null && this.dolphin.gotFish() && this.dolphin.getAirSupply() >= 100);
     }
 
     @Inject(method = "stop", at = @At(value = "HEAD"))

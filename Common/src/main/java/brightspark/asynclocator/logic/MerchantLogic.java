@@ -142,14 +142,13 @@ public class MerchantLogic {
     private static MerchantOffer updateMapAsyncInternal(
             Entity trader, int emeraldCost, int maxUses, int villagerXp, MapUpdateTask task) {
         if (trader instanceof AbstractVillager merchant && trader.level() instanceof ServerLevel serverLevel) {
-            // Use specialized method for merchant maps that creates proper MapId immediately
+            // Keep the pending result unpersisted until the locate succeeds
             ItemStack mapStack = CommonLogic.createMerchantMap(serverLevel);
-            ALConstants.logDebug("Created merchant map with MapId {} for offer", mapStack.get(DataComponents.MAP_ID));
+            ALConstants.logDebug("Created pending merchant map offer");
 
-            // Start async task with the properly initialized map
             task.apply(serverLevel, merchant, mapStack);
 
-            // Create the offdr with the map that has a valid ID
+            // Create the offer immediately. Finalization assigns the real map id on success
             ItemCost emeraldItemCost = new ItemCost(Items.EMERALD, emeraldCost);
             Optional<ItemCost> compassCost = Optional.of(new ItemCost(Items.COMPASS));
             return new MerchantOffer(emeraldItemCost, compassCost, mapStack, maxUses, villagerXp, 0.2F);

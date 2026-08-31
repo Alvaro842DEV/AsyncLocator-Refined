@@ -3,6 +3,10 @@ package brightspark.asynclocator.mixins;
 import brightspark.asynclocator.ALConstants;
 import brightspark.asynclocator.logic.EnderEyeItemLogic;
 import brightspark.asynclocator.platform.Services;
+import com.llamalad7.mixinextras.injector.v2.WrapWithCondition;
+import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
+import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
+import com.llamalad7.mixinextras.sugar.Local;
 import net.minecraft.advancements.critereon.UsedEnderEyeTrigger;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
@@ -14,16 +18,13 @@ import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.projectile.EyeOfEnder;
 import net.minecraft.world.item.EnderEyeItem;
-import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.levelgen.structure.Structure;
-import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.Vec3;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
-import org.spongepowered.asm.mixin.injection.callback.LocalCapture;
 
 @Mixin(EnderEyeItem.class)
 public class EnderEyeItemMixin {
@@ -31,7 +32,7 @@ public class EnderEyeItemMixin {
     Intercept EnderEyeItem#use call and return BlockPos.ZERO instead. It won't be used in the EyeOfEnder entity
     created later either, as we need to set the actual location ourselves.
     */
-    @Redirect(
+    @WrapOperation(
             method = "use",
             at =
                     @At(
@@ -43,13 +44,14 @@ public class EnderEyeItemMixin {
             TagKey<Structure> pStructureTag,
             BlockPos pPos,
             int pRadius,
-            boolean pSkipExistingChunks) {
+            boolean pSkipExistingChunks,
+            Operation<BlockPos> original) {
         if (Services.CONFIG.eyeOfEnderEnabled()) {
             ALConstants.logDebug("Intercepted EnderEyeItem#use call");
             return BlockPos.ZERO;
         } else {
             // Normal behaviour
-            return serverlevel.findNearestMapStructure(pStructureTag, pPos, pRadius, pSkipExistingChunks);
+            return original.call(serverlevel, pStructureTag, pPos, pRadius, pSkipExistingChunks);
         }
     }
 
@@ -60,56 +62,48 @@ public class EnderEyeItemMixin {
                     @At(
                             value = "INVOKE",
                             target =
-                                    "Lnet/minecraft/world/entity/projectile/EyeOfEnder;setItem(Lnet/minecraft/world/item/ItemStack;)V"),
-            locals = LocalCapture.CAPTURE_FAILSOFT)
+                                    "Lnet/minecraft/world/entity/projectile/EyeOfEnder;setItem(Lnet/minecraft/world/item/ItemStack;)V"))
     public void startAsyncLocateTask(
             Level pLevel,
             Player pPlayer,
             InteractionHand pHand,
             CallbackInfoReturnable<InteractionResult> cir,
-            ItemStack itemstack,
-            BlockHitResult blockhitresult,
-            ServerLevel serverlevel,
-            BlockPos blockpos,
-            EyeOfEnder eyeofender) {
+            @Local EyeOfEnder eyeofender) {
         if (!Services.CONFIG.eyeOfEnderEnabled()) return;
-        //noinspection DataFlowIssue
+        if (!(pLevel instanceof ServerLevel serverlevel)) return;
         EnderEyeItemLogic.locateAsync(serverlevel, pPlayer, eyeofender, (EnderEyeItem) (Object) this);
     }
 
-    @Redirect(
+    @WrapWithCondition(
             method = "use",
             at =
                     @At(
                             value = "INVOKE",
                             target =
-                                    "Lnet/minecraft/world/entity/projectile/EyeOfEnder;signalTo(Lnet/minecraft/core/BlockPos;)V"))
-    public void eyeOfEnderSignalTo(EyeOfEnder eyeOfEnder, BlockPos blockpos) {
-        if (!Services.CONFIG.eyeOfEnderEnabled()) eyeOfEnder.signalTo(blockpos);
-        // Else do nothing - we'll do this later if a location is found
+                                    "Lnet/minecraft/world/entity/projectile/EyeOfEnder;signalTo(Lnet/minecraft/world/phys/Vec3;)V"))
+    private boolean eyeOfEnderSignalTo(EyeOfEnder eyeOfEnder, Vec3 target) {
+        return !Services.CONFIG.eyeOfEnderEnabled();
     }
 
-    @Redirect(
+    @WrapWithCondition(
             method = "use",
             at =
                     @At(
                             value = "INVOKE",
                             target =
                                     "Lnet/minecraft/advancements/critereon/UsedEnderEyeTrigger;trigger(Lnet/minecraft/server/level/ServerPlayer;Lnet/minecraft/core/BlockPos;)V"))
-    private void triggerUsedEnderEyeCriteria(UsedEnderEyeTrigger trigger, ServerPlayer player, BlockPos pos) {
-        if (!Services.CONFIG.eyeOfEnderEnabled()) trigger.trigger(player, pos);
-        // Else do nothing - we'll do this later if a location is found
+    private boolean triggerUsedEnderEyeCriteria(UsedEnderEyeTrigger trigger, ServerPlayer player, BlockPos pos) {
+        return !Services.CONFIG.eyeOfEnderEnabled();
     }
 
-    @Redirect(
+    @WrapWithCondition(
             method = "use",
             at =
                     @At(
                             value = "INVOKE",
                             target =
                                     "Lnet/minecraft/world/entity/player/Player;awardStat(Lnet/minecraft/stats/Stat;)V"))
-    public void playerAwardStat(Player player, Stat<?> pStat) {
-        if (!Services.CONFIG.eyeOfEnderEnabled()) player.awardStat(pStat);
-        // Else do nothing - we'll do this later if a location is found
+    private boolean playerAwardStat(Player player, Stat<?> pStat) {
+        return !Services.CONFIG.eyeOfEnderEnabled();
     }
 }

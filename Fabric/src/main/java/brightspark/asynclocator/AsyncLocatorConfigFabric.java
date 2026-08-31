@@ -2,6 +2,7 @@ package brightspark.asynclocator;
 
 import brightspark.asynclocator.SparkConfig.Category;
 import brightspark.asynclocator.SparkConfig.Config;
+import brightspark.asynclocator.platform.FabricConfigHelper;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -84,6 +85,18 @@ public class AsyncLocatorConfigFabric {
 
     private AsyncLocatorConfigFabric() {}
 
+    private record ConfigState(
+            int maxConcurrentLocates,
+            int maxQueuedLocates,
+            int biomeSearchRadius,
+            boolean removeOffer,
+            boolean dolphinTreasureEnabled,
+            boolean eyeOfEnderEnabled,
+            boolean explorationMapEnabled,
+            boolean locateCommandEnabled,
+            boolean locateBiomeCommandEnabled,
+            boolean villagerTradeEnabled) {}
+
     // Helper method
     private static void resetToDefaults() {
         MAX_CONCURRENT_LOCATES = DEFAULT_MAX_CONCURRENT_LOCATES;
@@ -98,60 +111,56 @@ public class AsyncLocatorConfigFabric {
         FeatureToggles.VILLAGER_TRADE_ENABLED = true;
     }
 
-    public static void init() {
+    private static ConfigState captureState() {
+        return new ConfigState(
+                MAX_CONCURRENT_LOCATES,
+                MAX_QUEUED_LOCATES,
+                BIOME_SEARCH_RADIUS,
+                REMOVE_OFFER,
+                FeatureToggles.DOLPHIN_TREASURE_ENABLED,
+                FeatureToggles.EYE_OF_ENDER_ENABLED,
+                FeatureToggles.EXPLORATION_MAP_ENABLED,
+                FeatureToggles.LOCATE_COMMAND_ENABLED,
+                FeatureToggles.LOCATE_BIOME_COMMAND_ENABLED,
+                FeatureToggles.VILLAGER_TRADE_ENABLED);
+    }
+
+    private static void restoreState(ConfigState state) {
+        MAX_CONCURRENT_LOCATES = state.maxConcurrentLocates();
+        MAX_QUEUED_LOCATES = state.maxQueuedLocates();
+        BIOME_SEARCH_RADIUS = state.biomeSearchRadius();
+        REMOVE_OFFER = state.removeOffer();
+        FeatureToggles.DOLPHIN_TREASURE_ENABLED = state.dolphinTreasureEnabled();
+        FeatureToggles.EYE_OF_ENDER_ENABLED = state.eyeOfEnderEnabled();
+        FeatureToggles.EXPLORATION_MAP_ENABLED = state.explorationMapEnabled();
+        FeatureToggles.LOCATE_COMMAND_ENABLED = state.locateCommandEnabled();
+        FeatureToggles.LOCATE_BIOME_COMMAND_ENABLED = state.locateBiomeCommandEnabled();
+        FeatureToggles.VILLAGER_TRADE_ENABLED = state.villagerTradeEnabled();
+    }
+
+    public static synchronized void reload() throws IOException, IllegalAccessException {
+        Path configFile = FabricLoader.getInstance().getConfigDir().resolve(ALConstants.MOD_ID + ".properties");
+        ConfigState previous = captureState();
+        try {
+            if (Files.notExists(configFile)) {
+                throw new IOException("Config file does not exist: " + configFile);
+            }
+            readAndValidate(configFile);
+            FabricConfigHelper.refresh();
+        } catch (IOException | IllegalAccessException | RuntimeException exception) {
+            restoreState(previous);
+            FabricConfigHelper.refresh();
+            throw exception;
+        }
+    }
+
+    public static synchronized void init() {
         Path configFile = FabricLoader.getInstance().getConfigDir().resolve(ALConstants.MOD_ID + ".properties");
 
         if (Files.exists(configFile)) {
             ALConstants.logInfo("Config file found");
             try {
-                SparkConfig.read(configFile, AsyncLocatorConfigFabric.class);
-
-                // Validate values in case of manual edits
-                boolean needsRewrite = false;
-
-                if (MAX_CONCURRENT_LOCATES > MAX_MAX_CONCURRENT_LOCATES
-                        || MAX_CONCURRENT_LOCATES < MIN_MAX_CONCURRENT_LOCATES) {
-                    ALConstants.logError(
-                            "Invalid maxConcurrentLocates value ({}). Must be between {}-{}. Resetting to default ({}).",
-                            MAX_CONCURRENT_LOCATES,
-                            MIN_MAX_CONCURRENT_LOCATES,
-                            MAX_MAX_CONCURRENT_LOCATES,
-                            DEFAULT_MAX_CONCURRENT_LOCATES);
-                    MAX_CONCURRENT_LOCATES = DEFAULT_MAX_CONCURRENT_LOCATES;
-                    needsRewrite = true;
-                }
-
-                if (MAX_QUEUED_LOCATES > MAX_MAX_QUEUED_LOCATES || MAX_QUEUED_LOCATES < MIN_MAX_QUEUED_LOCATES) {
-                    ALConstants.logError(
-                            "Invalid maxQueuedLocates value ({}). Must be between {}-{}. Resetting to default ({}).",
-                            MAX_QUEUED_LOCATES,
-                            MIN_MAX_QUEUED_LOCATES,
-                            MAX_MAX_QUEUED_LOCATES,
-                            DEFAULT_MAX_QUEUED_LOCATES);
-                    MAX_QUEUED_LOCATES = DEFAULT_MAX_QUEUED_LOCATES;
-                    needsRewrite = true;
-                }
-
-                if (BIOME_SEARCH_RADIUS > MAX_BIOME_RADIUS || BIOME_SEARCH_RADIUS < MIN_BIOME_RADIUS) {
-                    ALConstants.logError(
-                            "Invalid biomeSearchRadius value ({}). Must be between {}-{}. Resetting to default ({}).",
-                            BIOME_SEARCH_RADIUS,
-                            MIN_BIOME_RADIUS,
-                            MAX_BIOME_RADIUS,
-                            DEFAULT_BIOME_RADIUS);
-                    BIOME_SEARCH_RADIUS = DEFAULT_BIOME_RADIUS;
-                    needsRewrite = true;
-                }
-
-                if (needsRewrite) {
-                    try {
-                        SparkConfig.write(configFile, AsyncLocatorConfigFabric.class);
-                        ALConstants.logInfo("Config file rewritten with default values");
-                    } catch (IOException | IllegalAccessException writeError) {
-                        ALConstants.logError(writeError, "Failed to rewrite config file");
-                    }
-                }
-
+                readAndValidate(configFile);
             } catch (IOException | IllegalAccessException | RuntimeException e) {
                 ALConstants.logError(e, "Failed to read config file {}. Resetting to defaults.", configFile);
                 resetToDefaults();
@@ -172,5 +181,30 @@ public class AsyncLocatorConfigFabric {
                 ALConstants.logError(e, "Failed to write config file {}", configFile);
             }
         }
+        FabricConfigHelper.refresh();
+    }
+
+    private static void readAndValidate(Path configFile) throws IOException, IllegalAccessException {
+        SparkConfig.read(configFile, AsyncLocatorConfigFabric.class);
+
+        if (MAX_CONCURRENT_LOCATES > MAX_MAX_CONCURRENT_LOCATES
+                || MAX_CONCURRENT_LOCATES < MIN_MAX_CONCURRENT_LOCATES) {
+            throw invalidRange(
+                    "maxConcurrentLocates",
+                    MAX_CONCURRENT_LOCATES,
+                    MIN_MAX_CONCURRENT_LOCATES,
+                    MAX_MAX_CONCURRENT_LOCATES);
+        }
+        if (MAX_QUEUED_LOCATES > MAX_MAX_QUEUED_LOCATES || MAX_QUEUED_LOCATES < MIN_MAX_QUEUED_LOCATES) {
+            throw invalidRange("maxQueuedLocates", MAX_QUEUED_LOCATES, MIN_MAX_QUEUED_LOCATES, MAX_MAX_QUEUED_LOCATES);
+        }
+        if (BIOME_SEARCH_RADIUS > MAX_BIOME_RADIUS || BIOME_SEARCH_RADIUS < MIN_BIOME_RADIUS) {
+            throw invalidRange("biomeSearchRadius", BIOME_SEARCH_RADIUS, MIN_BIOME_RADIUS, MAX_BIOME_RADIUS);
+        }
+    }
+
+    private static IllegalArgumentException invalidRange(String name, int value, int minimum, int maximum) {
+        return new IllegalArgumentException(
+                "Invalid " + name + " value (" + value + "). Must be between " + minimum + " and " + maximum);
     }
 }

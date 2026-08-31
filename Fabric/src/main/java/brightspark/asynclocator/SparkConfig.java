@@ -199,7 +199,12 @@ class SparkConfig {
     private static Object parseValueToType(String value, Class<?> type) {
         if (value.isBlank() && !type.isPrimitive()) return null;
         if (value.isBlank() && (type == int.class || type == float.class)) return 0;
-        if (type == boolean.class || type == Boolean.class) return Boolean.parseBoolean(value);
+        if (type == boolean.class || type == Boolean.class) {
+            if (!value.equalsIgnoreCase("true") && !value.equalsIgnoreCase("false")) {
+                throw new IllegalArgumentException("Config value '" + value + "' is not a boolean");
+            }
+            return Boolean.parseBoolean(value);
+        }
         if (type == int.class || type == Integer.class) return Integer.parseInt(value);
         if (type == float.class || type == Float.class) return Float.parseFloat(value);
         if (type == String.class) return value;
