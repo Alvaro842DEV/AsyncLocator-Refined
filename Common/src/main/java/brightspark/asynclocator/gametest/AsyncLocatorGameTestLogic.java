@@ -131,6 +131,34 @@ public final class AsyncLocatorGameTestLogic {
                 Files.writeString(configFile, originalConfig);
                 dispatcher.execute("asynclocator reload", source);
             }
+
+            int originalBiomeRadius = Services.CONFIG.biomeSearchRadius();
+            int preservedBiomeRadius = originalBiomeRadius == 6401 ? 6400 : 6401;
+            String missingValueConfig = originalConfig
+                    .replaceFirst("(?m)^[ \\t]*maxQueuedLocates[ \\t]*=[ \\t]*\\d+[ \\t]*(?:\\R|$)", "")
+                    .replaceFirst("(?m)^([ \\t]*biomeSearchRadius[ \\t]*=[ \\t]*)\\d+", "$1" + preservedBiomeRadius);
+            helper.assertFalse(
+                    originalConfig.equals(missingValueConfig),
+                    Component.literal("Could not remove a config value for upgrade testing"));
+            try {
+                Files.writeString(configFile, missingValueConfig);
+                helper.assertTrue(
+                        dispatcher.execute("asynclocator reload", source) == 1,
+                        Component.literal("Expected reload to add a missing config value"));
+                helper.assertTrue(
+                        Services.CONFIG.biomeSearchRadius() == preservedBiomeRadius,
+                        Component.literal("Config upgrade changed an existing value"));
+                String upgradedConfig = Files.readString(configFile);
+                helper.assertTrue(
+                        upgradedConfig.matches("(?s).*\\bmaxQueuedLocates\\s*=.*"),
+                        Component.literal("Config upgrade did not add maxQueuedLocates"));
+                helper.assertTrue(
+                        upgradedConfig.matches("(?s).*\\bbiomeSearchRadius\\s*=\\s*" + preservedBiomeRadius + "\\b.*"),
+                        Component.literal("Config upgrade did not preserve biomeSearchRadius"));
+            } finally {
+                Files.writeString(configFile, originalConfig);
+                dispatcher.execute("asynclocator reload", source);
+            }
             helper.assertTrue(
                     dispatcher.execute("al status", source) == 1,
                     Component.literal("Expected the /al shortcut to execute Async Locator status"));

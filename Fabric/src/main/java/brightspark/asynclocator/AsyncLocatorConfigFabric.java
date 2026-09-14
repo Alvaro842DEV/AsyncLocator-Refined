@@ -145,7 +145,11 @@ public class AsyncLocatorConfigFabric {
             if (Files.notExists(configFile)) {
                 throw new IOException("Config file does not exist: " + configFile);
             }
-            readAndValidate(configFile);
+            boolean missingEntries = readAndValidate(configFile);
+            if (missingEntries) {
+                SparkConfig.write(configFile, AsyncLocatorConfigFabric.class);
+                ALConstants.logInfo("Config file updated with missing values");
+            }
             FabricConfigHelper.refresh();
         } catch (IOException | IllegalAccessException | RuntimeException exception) {
             restoreState(previous);
@@ -160,7 +164,15 @@ public class AsyncLocatorConfigFabric {
         if (Files.exists(configFile)) {
             ALConstants.logInfo("Config file found");
             try {
-                readAndValidate(configFile);
+                boolean missingEntries = readAndValidate(configFile);
+                if (missingEntries) {
+                    try {
+                        SparkConfig.write(configFile, AsyncLocatorConfigFabric.class);
+                        ALConstants.logInfo("Config file updated with missing values");
+                    } catch (IOException | IllegalAccessException writeError) {
+                        ALConstants.logError(writeError, "Failed to update config file with missing values");
+                    }
+                }
             } catch (IOException | IllegalAccessException | RuntimeException e) {
                 ALConstants.logError(e, "Failed to read config file {}. Resetting to defaults.", configFile);
                 resetToDefaults();
@@ -184,8 +196,9 @@ public class AsyncLocatorConfigFabric {
         FabricConfigHelper.refresh();
     }
 
-    private static void readAndValidate(Path configFile) throws IOException, IllegalAccessException {
-        SparkConfig.read(configFile, AsyncLocatorConfigFabric.class);
+    private static boolean readAndValidate(Path configFile) throws IOException, IllegalAccessException {
+        resetToDefaults();
+        boolean missingEntries = SparkConfig.read(configFile, AsyncLocatorConfigFabric.class);
 
         if (MAX_CONCURRENT_LOCATES > MAX_MAX_CONCURRENT_LOCATES
                 || MAX_CONCURRENT_LOCATES < MIN_MAX_CONCURRENT_LOCATES) {
@@ -201,6 +214,7 @@ public class AsyncLocatorConfigFabric {
         if (BIOME_SEARCH_RADIUS > MAX_BIOME_RADIUS || BIOME_SEARCH_RADIUS < MIN_BIOME_RADIUS) {
             throw invalidRange("biomeSearchRadius", BIOME_SEARCH_RADIUS, MIN_BIOME_RADIUS, MAX_BIOME_RADIUS);
         }
+        return missingEntries;
     }
 
     private static IllegalArgumentException invalidRange(String name, int value, int minimum, int maximum) {
