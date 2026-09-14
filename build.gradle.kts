@@ -1,6 +1,4 @@
 import com.diffplug.gradle.spotless.SpotlessExtension
-import java.text.SimpleDateFormat
-import java.util.Date
 
 plugins {
     id("fabric-loom") version "1.17-SNAPSHOT" apply false
@@ -35,8 +33,6 @@ subprojects {
                 "Implementation-Title" to project.name,
                 "Implementation-Version" to archiveVersionProvider,
                 "Implementation-Vendor" to mod_author,
-                "Implementation-Timestamp" to
-                    providers.provider { SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssZ").format(Date()) },
                 "Built-On-Java" to
                     providers.provider {
                         "${System.getProperty("java.vm.version")} (${System.getProperty("java.vm.vendor")})"
