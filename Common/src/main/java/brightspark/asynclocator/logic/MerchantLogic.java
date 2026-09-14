@@ -5,6 +5,7 @@ import brightspark.asynclocator.AsyncLocator;
 import brightspark.asynclocator.mixins.MerchantOfferAccess;
 import brightspark.asynclocator.platform.Services;
 import java.util.Optional;
+import java.util.concurrent.TimeUnit;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
 import net.minecraft.core.HolderSet;
@@ -26,6 +27,8 @@ import net.minecraft.world.level.saveddata.maps.MapDecorationType;
 import org.jetbrains.annotations.Nullable;
 
 public class MerchantLogic {
+    private static final long MAP_LOCATE_TIMEOUT_MINUTES = 10L;
+
     private MerchantLogic() {}
 
     public static void invalidateMap(AbstractVillager merchant, ItemStack mapStack) {
@@ -110,6 +113,7 @@ public class MerchantLogic {
         return updateMapAsyncInternal(
                 pTrader, emeraldCost, maxUses, villagerXp, (level, merchant, mapStack) -> AsyncLocator.locate(
                                 level, destination, merchant.blockPosition(), 100, true)
+                        .withTimeout(MAP_LOCATE_TIMEOUT_MINUTES, TimeUnit.MINUTES)
                         .handleOnServerThread((pos, throwable) -> {
                             if (throwable != null) {
                                 ALConstants.logError(throwable, "Merchant map locate failed: invalidating offer");
@@ -130,6 +134,7 @@ public class MerchantLogic {
         return updateMapAsyncInternal(
                 pTrader, emeraldCost, maxUses, villagerXp, (level, merchant, mapStack) -> AsyncLocator.locate(
                                 level, structureSet, merchant.blockPosition(), 100, true)
+                        .withTimeout(MAP_LOCATE_TIMEOUT_MINUTES, TimeUnit.MINUTES)
                         .handleOnServerThread((pair, throwable) -> {
                             if (throwable != null) {
                                 ALConstants.logError(throwable, "Merchant map locate failed: invalidating offer");

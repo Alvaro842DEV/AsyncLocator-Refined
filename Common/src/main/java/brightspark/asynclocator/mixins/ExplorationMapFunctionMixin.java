@@ -7,6 +7,7 @@ import brightspark.asynclocator.logic.ExplorationMapFunctionLogic;
 import brightspark.asynclocator.logic.MerchantLogic;
 import brightspark.asynclocator.platform.Services;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
 import net.minecraft.network.chat.Component;
@@ -30,6 +31,8 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 @Mixin(ExplorationMapFunction.class)
 public abstract class ExplorationMapFunctionMixin {
+    @Unique
+    private static final long MAP_LOCATE_TIMEOUT_MINUTES = 10L;
 
     @Shadow
     @Final
@@ -73,6 +76,7 @@ public abstract class ExplorationMapFunctionMixin {
         CommonLogic.LootrTarget lootrTarget = CommonLogic.getActiveLootrTarget();
 
         AsyncLocator.locate(serverLevel, destination, originPos, searchRadius, skipKnownStructures)
+                .withTimeout(MAP_LOCATE_TIMEOUT_MINUTES, TimeUnit.MINUTES)
                 .handleOnServerThread((foundPos, throwable) -> {
                     if (throwable != null) {
                         ALConstants.logError(
