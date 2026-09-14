@@ -146,13 +146,16 @@ public class AsyncLocator {
         }
     }
 
-    private static Future<?> submitTask(CompletableFuture<?> completableFuture, Runnable task) {
+    private static Future<?> submitTask(
+            CompletableFuture<?> completableFuture, CompletableFuture<Void> startedFuture, Runnable task) {
         synchronized (AsyncLocator.class) {
             if (LOCATING_EXECUTOR_SERVICE == null || LOCATING_EXECUTOR_SERVICE.isShutdown()) {
                 if (EXECUTOR_STOPPED) {
                     ALConstants.logWarn("Locating executor service has been shut down - rejecting locate task");
-                    completableFuture.completeExceptionally(
-                            new RejectedExecutionException("Async locator executor service has been shut down"));
+                    RejectedExecutionException exception =
+                            new RejectedExecutionException("Async locator executor service has been shut down");
+                    startedFuture.completeExceptionally(exception);
+                    completableFuture.completeExceptionally(exception);
                     return CompletableFuture.completedFuture(null);
                 }
                 ALConstants.logWarn("Locating executor service not initialized yet: creating lazily");
@@ -163,6 +166,7 @@ public class AsyncLocator {
             if (limiter == null) {
                 RejectedExecutionException exception =
                         new RejectedExecutionException("Locate task limiter is not initialized");
+                startedFuture.completeExceptionally(exception);
                 completableFuture.completeExceptionally(exception);
                 return CompletableFuture.completedFuture(null);
             }
@@ -173,16 +177,18 @@ public class AsyncLocator {
                                 + " concurrent and "
                                 + Services.CONFIG.maxQueuedLocates()
                                 + " queued searches)");
+                startedFuture.completeExceptionally(exception);
                 completableFuture.completeExceptionally(exception);
                 return CompletableFuture.completedFuture(null);
             }
 
-            FutureTask<Void> admittedTask = limiter.createTask(completableFuture, task);
+            FutureTask<Void> admittedTask = limiter.createTask(completableFuture, startedFuture, task);
             try {
                 LOCATING_EXECUTOR_SERVICE.execute(admittedTask);
                 return admittedTask;
             } catch (RejectedExecutionException e) {
                 admittedTask.cancel(false);
+                startedFuture.completeExceptionally(e);
                 completableFuture.completeExceptionally(e);
                 return CompletableFuture.completedFuture(null);
             }
@@ -216,10 +222,12 @@ public class AsyncLocator {
     private static LocateTask<BlockPos> startLocateLevel(
             ServerLevel level, TagKey<Structure> structureTag, BlockPos pos, int searchRadius, boolean skipKnown) {
         CompletableFuture<BlockPos> completableFuture = new CompletableFuture<>();
+        CompletableFuture<Void> startedFuture = new CompletableFuture<>();
         Future<?> future = submitTask(
                 completableFuture,
+                startedFuture,
                 () -> doLocateLevel(completableFuture, level, structureTag, pos, searchRadius, skipKnown));
-        return new LocateTask<>(level.getServer(), completableFuture, future);
+        return new LocateTask<>(level.getServer(), completableFuture, future, startedFuture);
     }
 
     /**
@@ -250,10 +258,12 @@ public class AsyncLocator {
     private static LocateTask<Pair<BlockPos, Holder<Structure>>> startLocateChunkGenerator(
             ServerLevel level, HolderSet<Structure> structureSet, BlockPos pos, int searchRadius, boolean skipKnown) {
         CompletableFuture<Pair<BlockPos, Holder<Structure>>> completableFuture = new CompletableFuture<>();
+        CompletableFuture<Void> startedFuture = new CompletableFuture<>();
         Future<?> future = submitTask(
                 completableFuture,
+                startedFuture,
                 () -> doLocateChunkGenerator(completableFuture, level, structureSet, pos, searchRadius, skipKnown));
-        return new LocateTask<>(level.getServer(), completableFuture, future);
+        return new LocateTask<>(level.getServer(), completableFuture, future, startedFuture);
     }
 
     @SuppressWarnings("unchecked")
@@ -271,7 +281,7 @@ public class AsyncLocator {
                 PENDING_LOCATES.remove(key, shared);
                 continue;
             }
-            LocateTask<T> subscription = new LocateTask<>(level.getServer(), child, child);
+            LocateTask<T> subscription = new LocateTask<>(level.getServer(), child, child, shared.startedFuture());
 
             if (!startsSearch) return subscription;
 
@@ -369,8 +379,10 @@ public class AsyncLocator {
                 searchRadius);
 
         CompletableFuture<Pair<BlockPos, Holder<Biome>>> completableFuture = new CompletableFuture<>();
+        CompletableFuture<Void> startedFuture = new CompletableFuture<>();
         Future<?> future = submitTask(
                 completableFuture,
+                startedFuture,
                 () -> doLocateBiome(
                         completableFuture,
                         level,
@@ -380,7 +392,7 @@ public class AsyncLocator {
                         searchRadius,
                         horizontalStep,
                         verticalStep));
-        return new LocateTask<>(level.getServer(), completableFuture, future);
+        return new LocateTask<>(level.getServer(), completableFuture, future, startedFuture);
     }
 
     private static void doLocateBiome(
@@ -429,7 +441,15 @@ public class AsyncLocator {
      * result of it.
      * The taskFuture is the future for the {@link Runnable} itself in the executor service.
      */
-    public record LocateTask<T>(MinecraftServer server, CompletableFuture<T> completableFuture, Future<?> taskFuture) {
+    public record LocateTask<T>(
+            MinecraftServer server,
+            CompletableFuture<T> completableFuture,
+            Future<?> taskFuture,
+            CompletableFuture<Void> startedFuture) {
+
+        public LocateTask(MinecraftServer server, CompletableFuture<T> completableFuture, Future<?> taskFuture) {
+            this(server, completableFuture, taskFuture, CompletableFuture.completedFuture(null));
+        }
 
         /**
          * Helper function that calls {@link CompletableFuture#thenAccept(Consumer)} with the given action.
@@ -508,11 +528,14 @@ public class AsyncLocator {
         }
 
         /*
-         * Fails this task with a {@link TimeoutException} if it
-         * does not finish within the given time
+         * Fails this task with a {@link TimeoutException} if it does not finish within the given time
+         * after acquiring execution capacity. Time spent waiting in the queue is not counted.
          */
         public LocateTask<T> withTimeout(long timeout, TimeUnit unit) {
-            completableFuture.orTimeout(timeout, unit);
+            startedFuture.thenRun(() -> completableFuture.orTimeout(timeout, unit));
+            completableFuture.whenComplete((result, throwable) -> {
+                if (throwable instanceof TimeoutException) taskFuture.cancel(true);
+            });
             return this;
         }
 

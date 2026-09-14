@@ -8,6 +8,7 @@ import java.util.function.Consumer;
 final class SharedLocate<T> {
     private final Consumer<SharedLocate<T>> removePending;
     private final CompletableFuture<T> result = new CompletableFuture<>();
+    private final CompletableFuture<Void> started = new CompletableFuture<>();
     private LocateTask<T> underlyingTask;
     private int subscribers;
     private boolean closed;
@@ -32,7 +33,15 @@ final class SharedLocate<T> {
             return;
         }
 
+        task.startedFuture().whenComplete((ignored, throwable) -> {
+            if (throwable == null) started.complete(null);
+            else started.completeExceptionally(throwable);
+        });
         task.completableFuture().whenComplete(this::complete);
+    }
+
+    CompletableFuture<Void> startedFuture() {
+        return started;
     }
 
     void fail(Throwable throwable) {
@@ -48,6 +57,7 @@ final class SharedLocate<T> {
         }
 
         if (taskToCancel != null) taskToCancel.cancel();
+        started.cancel(false);
         result.completeExceptionally(
                 new RejectedExecutionException("Async locator executor service has been shut down"));
     }
@@ -61,6 +71,10 @@ final class SharedLocate<T> {
 
         if (throwable == null) result.complete(value);
         else result.completeExceptionally(throwable);
+        if (!started.isDone()) {
+            if (throwable == null) started.complete(null);
+            else started.completeExceptionally(throwable);
+        }
     }
 
     private void releaseSubscriber() {
@@ -77,6 +91,9 @@ final class SharedLocate<T> {
         }
 
         if (taskToCancel != null) taskToCancel.cancel();
-        if (abandoned) result.cancel(false);
+        if (abandoned) {
+            started.cancel(false);
+            result.cancel(false);
+        }
     }
 }

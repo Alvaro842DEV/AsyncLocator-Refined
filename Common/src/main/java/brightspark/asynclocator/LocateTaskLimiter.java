@@ -46,8 +46,8 @@ final class LocateTaskLimiter {
         }
     }
 
-    FutureTask<Void> createTask(CompletableFuture<?> result, Runnable task) {
-        return new AdmittedTask(result, task);
+    FutureTask<Void> createTask(CompletableFuture<?> result, CompletableFuture<Void> started, Runnable task) {
+        return new AdmittedTask(result, started, task);
     }
 
     Snapshot snapshot() {
@@ -94,15 +94,17 @@ final class LocateTaskLimiter {
         private final AtomicBoolean started = new AtomicBoolean();
         private final AtomicBoolean admissionReleased = new AtomicBoolean();
 
-        private AdmittedTask(CompletableFuture<?> result, Runnable task) {
+        private AdmittedTask(CompletableFuture<?> result, CompletableFuture<Void> started, Runnable task) {
             super(() -> {
                 boolean acquired = false;
                 try {
                     acquireCapacity();
                     acquired = true;
+                    started.complete(null);
                     task.run();
                 } catch (InterruptedException exception) {
                     Thread.currentThread().interrupt();
+                    started.completeExceptionally(exception);
                     result.completeExceptionally(exception);
                 } finally {
                     if (acquired) releaseCapacity();

@@ -30,6 +30,19 @@ class SharedLocateTest {
     }
 
     @Test
+    void underlyingStartIsPropagatedToSubscribers() {
+        SharedLocate<String> shared = new SharedLocate<>(ignored -> {});
+        CompletableFuture<Void> underlyingStarted = new CompletableFuture<>();
+        shared.connect(
+                new LocateTask<>(null, new CompletableFuture<>(), new FutureTask<>(() -> null), underlyingStarted));
+
+        assertFalse(shared.startedFuture().isDone());
+        underlyingStarted.complete(null);
+        assertTrue(shared.startedFuture().isDone());
+        assertFalse(shared.startedFuture().isCompletedExceptionally());
+    }
+
+    @Test
     void lastSubscriberCancellationCancelsUnderlyingTask() {
         AtomicBoolean removed = new AtomicBoolean();
         SharedLocate<String> shared = new SharedLocate<>(ignored -> removed.set(true));
