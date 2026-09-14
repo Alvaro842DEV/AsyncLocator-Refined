@@ -95,18 +95,23 @@ public class DolphinSwimToTreasureGoalMixin {
      */
     @Unique
     private void handleFindTreasureAsync(ServerLevel level, BlockPos origin) {
-        locateTask = AsyncLocator.locate(level, StructureTags.DOLPHIN_LOCATED, origin, 50, false)
-                .handleOnServerThread((pos, throwable) -> {
-                    if (throwable instanceof CancellationException) {
-                        ALConstants.logDebug("Dolphin treasure locate task cancelled");
-                        return;
-                    }
-                    if (throwable != null) {
-                        ALConstants.logError(throwable, "Dolphin treasure locate failed");
-                        pos = null;
-                    }
-                    handleLocationFound(level, pos);
-                });
+        LocateTask<BlockPos> task = AsyncLocator.locate(level, StructureTags.DOLPHIN_LOCATED, origin, 50, false);
+        locateTask = task;
+        task.handleOnServerThread((pos, throwable) -> {
+            if (locateTask != task) {
+                ALConstants.logDebug("Ignoring completion from a replaced dolphin treasure locate task");
+                return;
+            }
+            if (throwable instanceof CancellationException) {
+                ALConstants.logDebug("Dolphin treasure locate task cancelled");
+                return;
+            }
+            if (throwable != null) {
+                ALConstants.logError(throwable, "Dolphin treasure locate failed");
+                pos = null;
+            }
+            handleLocationFound(level, pos);
+        });
     }
 
     @Unique
