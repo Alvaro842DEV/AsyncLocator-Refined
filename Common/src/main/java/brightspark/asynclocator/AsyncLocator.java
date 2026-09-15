@@ -276,7 +276,14 @@ public class AsyncLocator {
             boolean startsSearch = shared == null;
             if (startsSearch) shared = candidate;
 
-            CompletableFuture<T> child = shared.subscribe();
+            CompletableFuture<T> child;
+            try {
+                child = shared.subscribe(Services.CONFIG.maxConcurrentLocates() + Services.CONFIG.maxQueuedLocates());
+            } catch (RejectedExecutionException exception) {
+                // Rejected callers must not attach callbacks (including withTimeout) to the shared future
+                CompletableFuture<T> failed = CompletableFuture.failedFuture(exception);
+                return new LocateTask<>(level.getServer(), failed, failed, CompletableFuture.failedFuture(exception));
+            }
             if (child == null) {
                 PENDING_LOCATES.remove(key, shared);
                 continue;
@@ -315,6 +322,8 @@ public class AsyncLocator {
                 ALConstants.logInfo("Found {} at {} (took {}ms)", structureTag, foundPos, time);
             }
             completableFuture.complete(foundPos);
+        } catch (CancellationException exception) {
+            completableFuture.completeExceptionally(exception);
         } catch (Throwable t) {
             ALConstants.logError(t, "Exception while locating {} around {}", structureTag, pos);
             completableFuture.completeExceptionally(t);
@@ -347,6 +356,8 @@ public class AsyncLocator {
                         time);
             }
             completableFuture.complete(foundPair);
+        } catch (CancellationException exception) {
+            completableFuture.completeExceptionally(exception);
         } catch (Throwable t) {
             ALConstants.logError(t, "Exception while locating {} around {}", structureSet, pos);
             completableFuture.completeExceptionally(t);
@@ -429,6 +440,8 @@ public class AsyncLocator {
                         time);
             }
             completableFuture.complete(foundPair);
+        } catch (CancellationException exception) {
+            completableFuture.completeExceptionally(exception);
         } catch (Throwable t) {
             ALConstants.logError(t, "Exception while locating biomes {} around {}", printableName, pos);
             completableFuture.completeExceptionally(t);

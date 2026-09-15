@@ -2,15 +2,63 @@ package brightspark.asynclocator;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import brightspark.asynclocator.AsyncLocator.LocateTask;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.FutureTask;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.Test;
 
 class SharedLocateTest {
+    @Test
+    void concurrentSubscribersCannotExceedLimit() throws Exception {
+        SharedLocate<String> shared = new SharedLocate<>(ignored -> {});
+        List<Future<Boolean>> attempts = new ArrayList<>();
+        try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
+            for (int i = 0; i < 32; i++) {
+                attempts.add(executor.submit(() -> {
+                    try {
+                        shared.subscribe(4);
+                        return true;
+                    } catch (RejectedExecutionException expected) {
+                        return false;
+                    }
+                }));
+            }
+            int accepted = 0;
+            for (Future<Boolean> attempt : attempts) {
+                if (attempt.get(5, TimeUnit.SECONDS)) accepted++;
+            }
+            assertEquals(4, accepted);
+        } finally {
+            shared.shutdown();
+        }
+    }
+
+    @Test
+    void subscriptionLimitSurvivesCancellationWithoutAffectingRemainingCaller() {
+        SharedLocate<String> shared = new SharedLocate<>(ignored -> {});
+        CompletableFuture<String> first = shared.subscribe(2);
+        CompletableFuture<String> second = shared.subscribe(2);
+        CompletableFuture<String> result = new CompletableFuture<>();
+        FutureTask<Void> task = new FutureTask<>(() -> null);
+        shared.connect(new LocateTask<>(null, result, task));
+
+        second.cancel(false);
+        assertThrows(RejectedExecutionException.class, () -> shared.subscribe(2));
+        assertFalse(task.isCancelled());
+        result.complete("stronghold");
+        assertEquals("stronghold", first.join());
+    }
+
     @Test
     void completionIsDeliveredToEverySubscriberWithoutCancellingUnderlyingTask() {
         AtomicBoolean removed = new AtomicBoolean();

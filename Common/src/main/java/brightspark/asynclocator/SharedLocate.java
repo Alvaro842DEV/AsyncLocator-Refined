@@ -11,6 +11,7 @@ final class SharedLocate<T> {
     private final CompletableFuture<Void> started = new CompletableFuture<>();
     private LocateTask<T> underlyingTask;
     private int subscribers;
+    private int subscriptions;
     private boolean closed;
 
     SharedLocate(Consumer<SharedLocate<T>> removePending) {
@@ -18,8 +19,17 @@ final class SharedLocate<T> {
     }
 
     synchronized CompletableFuture<T> subscribe() {
+        return subscribe(Integer.MAX_VALUE);
+    }
+
+    synchronized CompletableFuture<T> subscribe(int maxSubscriptions) {
         if (closed) return null;
 
+        if (subscriptions >= maxSubscriptions) {
+            throw new RejectedExecutionException("Shared locate subscriber capacity exhausted");
+        }
+
+        subscriptions++;
         subscribers++;
         CompletableFuture<T> child = result.copy();
         child.whenComplete((ignoredResult, ignoredThrowable) -> releaseSubscriber());
