@@ -17,6 +17,7 @@ import net.minecraft.ChatFormatting;
 import net.minecraft.commands.CommandSource;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.component.DataComponents;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.TextColor;
@@ -33,10 +34,16 @@ import net.minecraft.world.item.EnderEyeItem;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.trading.MerchantOffer;
+import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.GameType;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.biome.Biomes;
+import net.minecraft.world.level.biome.MultiNoiseBiomeSource;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.ChestBlockEntity;
+import net.minecraft.world.level.levelgen.structure.BuiltinStructures;
+import net.minecraft.world.level.levelgen.structure.placement.RandomSpreadStructurePlacement;
+import net.minecraft.world.level.levelgen.structure.placement.RandomSpreadType;
 import net.minecraft.world.level.saveddata.maps.MapDecorationTypes;
 import net.minecraft.world.level.storage.loot.BuiltInLootTables;
 import net.minecraft.world.level.storage.loot.LootContext;
@@ -228,6 +235,65 @@ public final class AsyncLocatorGameTestLogic {
 
         helper.succeedWhen(() ->
                 helper.assertTrue(found.get(), Component.literal("Expected to find a plains biome in a flat world")));
+    }
+
+    public static void interruptedBiomeLocateStopsBeforeSampling(GameTestHelper helper) {
+        var level = helper.getLevel().getServer().getLevel(Level.NETHER);
+        helper.assertTrue(
+                level != null
+                        && level.getChunkSource().getGenerator().getBiomeSource() instanceof MultiNoiseBiomeSource,
+                Component.literal("Expected the Nether to exercise the vanilla spiral biome search"));
+        AtomicBoolean cancelled = new AtomicBoolean();
+        AsyncLocator.locateBiome(
+                        level,
+                        holder -> {
+                            Thread.currentThread().interrupt();
+                            return true;
+                        },
+                        "interrupted biome (game test)",
+                        new BlockPos(0, 64, 0),
+                        64,
+                        32,
+                        64)
+                .handleOnServerThread(
+                        (pair, throwable) -> cancelled.set(pair == null && throwable instanceof CancellationException));
+        helper.succeedWhen(() -> helper.assertTrue(
+                cancelled.get(), Component.literal("Interrupted biome search did not stop at its checkpoint")));
+    }
+
+    public static void interruptedStructureCheckStopsBeforeStorage(GameTestHelper helper) {
+        var level = helper.getLevel();
+        var structure = level.registryAccess()
+                .lookupOrThrow(Registries.STRUCTURE)
+                .getOrThrow(BuiltinStructures.STRONGHOLD)
+                .value();
+        var placement = new RandomSpreadStructurePlacement(32, 8, RandomSpreadType.LINEAR, 0);
+        var chunkPos = new ChunkPos(helper.absolutePos(new BlockPos(1, 1, 1)));
+        AtomicBoolean checkpointReached = new AtomicBoolean();
+        AtomicBoolean cancelled = new AtomicBoolean();
+        AsyncLocator.locateBiome(
+                        level,
+                        holder -> {
+                            Thread.currentThread().interrupt();
+                            try {
+                                level.structureManager().checkStructurePresence(chunkPos, structure, placement, true);
+                            } catch (CancellationException exception) {
+                                checkpointReached.set(true);
+                                throw exception;
+                            } finally {
+                                Thread.interrupted();
+                            }
+                            return true;
+                        },
+                        "interrupted structure check (game test)",
+                        helper.absolutePos(new BlockPos(1, 1, 1)),
+                        64,
+                        32,
+                        64)
+                .handleOnServerThread((pair, throwable) -> cancelled.set(
+                        checkpointReached.get() && pair == null && throwable instanceof CancellationException));
+        helper.succeedWhen(() -> helper.assertTrue(
+                cancelled.get(), Component.literal("Interrupted structure check did not stop before storage access")));
     }
 
     public static void explorationMapInvalidatesWhenNothingFound(GameTestHelper helper) {

@@ -30,6 +30,16 @@ public final class AsyncLocatorFabricGameTests {
     }
 
     @GameTest(structure = EMPTY_STRUCTURE, maxTicks = MAX_TICKS)
+    public void interruptedBiomeLocateStopsBeforeSampling(GameTestHelper helper) {
+        AsyncLocatorGameTestLogic.interruptedBiomeLocateStopsBeforeSampling(helper);
+    }
+
+    @GameTest(structure = EMPTY_STRUCTURE, maxTicks = MAX_TICKS)
+    public void interruptedStructureCheckStopsBeforeStorage(GameTestHelper helper) {
+        AsyncLocatorGameTestLogic.interruptedStructureCheckStopsBeforeStorage(helper);
+    }
+
+    @GameTest(structure = EMPTY_STRUCTURE, maxTicks = MAX_TICKS)
     public void explorationMapInvalidatesWhenNothingFound(GameTestHelper helper) {
         AsyncLocatorGameTestLogic.explorationMapInvalidatesWhenNothingFound(helper);
     }

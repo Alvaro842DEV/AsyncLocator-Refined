@@ -35,6 +35,11 @@ public final class AsyncLocatorNeoForgeGameTests {
                 "coalesced_locate_survives_sibling_cancel",
                 AsyncLocatorGameTestLogic::coalescedLocateSurvivesSiblingCancel);
         tests.put("biome_locate_finds_plains", AsyncLocatorGameTestLogic::biomeLocateFindsPlains);
+        tests.put(
+                "interrupted_structure_check_stops",
+                AsyncLocatorGameTestLogic::interruptedStructureCheckStopsBeforeStorage);
+        tests.put(
+                "interrupted_biome_locate_stops", AsyncLocatorGameTestLogic::interruptedBiomeLocateStopsBeforeSampling);
         tests.put("exploration_map_invalidates", AsyncLocatorGameTestLogic::explorationMapInvalidatesWhenNothingFound);
         tests.put("merchant_map_invalidates", AsyncLocatorGameTestLogic::merchantMapInvalidatesWhenNothingFound);
         tests.put("eye_of_ender_refunds", AsyncLocatorGameTestLogic::eyeOfEnderRefundsWhenNothingFound);

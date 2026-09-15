@@ -305,7 +305,8 @@ public class AsyncLocator {
             ALConstants.logDebug(
                     "Trying to locate {} in {} around {} within {} chunks", structureTag, level, pos, searchRadius);
             long start = System.nanoTime();
-            BlockPos foundPos = level.findNearestMapStructure(structureTag, pos, searchRadius, skipExistingChunks);
+            BlockPos foundPos = LocateCancellation.call(
+                    () -> level.findNearestMapStructure(structureTag, pos, searchRadius, skipExistingChunks));
             String time =
                     NumberFormat.getNumberInstance().format(TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start));
             if (foundPos == null) {
@@ -331,9 +332,9 @@ public class AsyncLocator {
             ALConstants.logDebug(
                     "Trying to locate {} in {} around {} within {} chunks", structureSet, level, pos, searchRadius);
             long start = System.nanoTime();
-            Pair<BlockPos, Holder<Structure>> foundPair = level.getChunkSource()
+            Pair<BlockPos, Holder<Structure>> foundPair = LocateCancellation.call(() -> level.getChunkSource()
                     .getGenerator()
-                    .findNearestMapStructure(level, structureSet, pos, searchRadius, skipExistingChunks);
+                    .findNearestMapStructure(level, structureSet, pos, searchRadius, skipExistingChunks));
             String time =
                     NumberFormat.getNumberInstance().format(TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start));
             if (foundPair == null) {
@@ -413,8 +414,8 @@ public class AsyncLocator {
                     searchRadius);
             long start = System.nanoTime();
 
-            Pair<BlockPos, Holder<Biome>> foundPair =
-                    level.findClosestBiome3d(biomePredicate, pos, searchRadius, horizontalStep, verticalStep);
+            Pair<BlockPos, Holder<Biome>> foundPair = LocateCancellation.call(
+                    () -> level.findClosestBiome3d(biomePredicate, pos, searchRadius, horizontalStep, verticalStep));
 
             String time =
                     NumberFormat.getNumberInstance().format(TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start));
@@ -541,7 +542,8 @@ public class AsyncLocator {
 
         /*
          * Cancels this caller's futures so pending callbacks are not run.
-         * Cancellation is cooperative and does not stop an ongoing search.
+         * Cancellation is cooperative: vanilla searches stop at the next checkpoint, not during
+         * an ongoing storage read, generation operation, or structure reference update.
          */
         public void cancel() {
             taskFuture.cancel(true);

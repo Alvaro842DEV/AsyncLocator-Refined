@@ -6,6 +6,7 @@
     "minVersion": "0.5.1"
   },
   "mixins": [
+    "BiomeSourceMixin",
     "ChunkGeneratorMixin",
     "DolphinAccessor",
     "DolphinSwimToTreasureGoalMixin",

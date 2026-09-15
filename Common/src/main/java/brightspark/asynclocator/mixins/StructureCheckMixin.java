@@ -1,5 +1,6 @@
 package brightspark.asynclocator.mixins;
 
+import brightspark.asynclocator.LocateCancellation;
 import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import java.util.Map;
@@ -27,7 +28,11 @@ public abstract class StructureCheckMixin {
             StructurePlacement placement,
             boolean skipKnownStructures,
             Operation<StructureCheckResult> original) {
+        LocateCancellation.check();
         synchronized (this) {
+            // Re-check after acquiring the monitor. Vanilla checkStart has not accessed its
+            // caches yet, and ChunkGenerator has not begun claiming a reference for this candidate
+            LocateCancellation.check();
             return original.call(chunkPos, structure, placement, skipKnownStructures);
         }
     }
