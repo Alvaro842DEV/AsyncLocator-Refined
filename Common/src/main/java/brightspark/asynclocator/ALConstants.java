@@ -30,6 +30,6 @@ public class ALConstants {
     }
 
     public static void logDebug(String text, Object... args) {
-        LOG.debug(LOG_PREFIX + text, args);
+        if (LOG.isDebugEnabled()) LOG.debug(LOG_PREFIX + text, args);
     }
 }

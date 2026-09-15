@@ -1,6 +1,5 @@
 package brightspark.asynclocator.mixins;
 
-import brightspark.asynclocator.ALConstants;
 import brightspark.asynclocator.logic.EyeOfEnderData;
 import net.minecraft.world.entity.projectile.EyeOfEnder;
 import net.minecraft.world.phys.Vec3;
@@ -39,7 +38,6 @@ public class EyeOfEnderMixin implements EyeOfEnderData {
             cancellable = true)
     public void skipTick(CallbackInfo ci) {
         if (locateTaskOngoing) {
-            ALConstants.logDebug("Intercepted EyeOfEnder#tick call - skipping tick");
             ci.cancel();
         }
     }
