@@ -22,6 +22,66 @@ import org.junit.jupiter.api.Test;
 
 class LocateTaskLimiterTest {
     @Test
+    void cancellingRunningWorkKeepsCapacityUntilTheRunnableExits() throws Exception {
+        LocateTaskLimiter limiter = new LocateTaskLimiter(1, 1);
+        CompletableFuture<Void> release = new CompletableFuture<>();
+        CompletableFuture<Void> started = new CompletableFuture<>();
+        assertTrue(limiter.tryAdmit());
+        FutureTask<Void> first = limiter.createTask(new CompletableFuture<>(), started, release::join);
+        assertTrue(limiter.tryAdmit());
+        CompletableFuture<Void> nextStarted = new CompletableFuture<>();
+        FutureTask<Void> next = limiter.createTask(new CompletableFuture<>(), nextStarted, () -> {});
+
+        try (ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor()) {
+            try {
+                executor.execute(first);
+                started.get(5, TimeUnit.SECONDS);
+                executor.execute(next);
+                first.cancel(true);
+                assertEquals(1, limiter.snapshot().active());
+                assertFalse(nextStarted.isDone(), "Cancellation must not oversubscribe still running work");
+            } finally {
+                release.complete(null);
+            }
+            next.get(5, TimeUnit.SECONDS);
+        }
+        assertEquals(0, limiter.snapshot().active());
+        assertEquals(0, limiter.snapshot().queued());
+    }
+
+    @Test
+    void cancelledWaitersDoNotPreventRemainingQueueFromDraining() throws Exception {
+        LocateTaskLimiter limiter = new LocateTaskLimiter(1, 32);
+        CompletableFuture<Void> release = new CompletableFuture<>();
+        CompletableFuture<Void> started = new CompletableFuture<>();
+        assertTrue(limiter.tryAdmit());
+        FutureTask<Void> first = limiter.createTask(new CompletableFuture<>(), started, release::join);
+        List<FutureTask<Void>> survivors = new ArrayList<>();
+        AtomicInteger completed = new AtomicInteger();
+
+        try (ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor()) {
+            try {
+                executor.execute(first);
+                started.get(5, TimeUnit.SECONDS);
+                for (int i = 0; i < 32; i++) {
+                    assertTrue(limiter.tryAdmit());
+                    FutureTask<Void> queued = limiter.createTask(
+                            new CompletableFuture<>(), new CompletableFuture<>(), completed::incrementAndGet);
+                    executor.execute(queued);
+                    if (i % 2 == 0) queued.cancel(true);
+                    else survivors.add(queued);
+                }
+            } finally {
+                release.complete(null);
+            }
+            first.get(5, TimeUnit.SECONDS);
+            for (FutureTask<Void> survivor : survivors) survivor.get(5, TimeUnit.SECONDS);
+        }
+        assertEquals(16, completed.get());
+        assertEquals(new LocateTaskLimiter.Snapshot(0, 0, 1, 32), limiter.snapshot());
+    }
+
+    @Test
     void locateTimeoutStartsOnlyAfterExecutionCapacityIsAcquired() throws Exception {
         CompletableFuture<String> result = new CompletableFuture<>();
         CompletableFuture<Void> started = new CompletableFuture<>();

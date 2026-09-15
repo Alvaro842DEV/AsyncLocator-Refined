@@ -75,7 +75,7 @@ final class LocateTaskLimiter {
         lock.lock();
         try {
             active--;
-            capacityAvailable.signalAll();
+            capacityAvailable.signal();
         } finally {
             lock.unlock();
         }
