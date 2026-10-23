@@ -19,6 +19,10 @@ public final class LocateCancellation {
         }
     }
 
+    static boolean isActive() {
+        return Boolean.TRUE.equals(LOCATING.get());
+    }
+
     public static void check() {
         // The common, non-interrupted path requires no ThreadLocal lookup or allocation
         if (Thread.currentThread().isInterrupted() && Boolean.TRUE.equals(LOCATING.get())) {
