@@ -40,6 +40,11 @@ public final class AsyncLocatorFabricGameTests {
     }
 
     @GameTest(structure = EMPTY_STRUCTURE, maxTicks = MAX_TICKS)
+    public void locateWorkerLoadsStructureChunkItself(GameTestHelper helper) {
+        AsyncLocatorGameTestLogic.locateWorkerLoadsStructureChunkItself(helper);
+    }
+
+    @GameTest(structure = EMPTY_STRUCTURE, maxTicks = MAX_TICKS)
     public void explorationMapInvalidatesWhenNothingFound(GameTestHelper helper) {
         AsyncLocatorGameTestLogic.explorationMapInvalidatesWhenNothingFound(helper);
     }

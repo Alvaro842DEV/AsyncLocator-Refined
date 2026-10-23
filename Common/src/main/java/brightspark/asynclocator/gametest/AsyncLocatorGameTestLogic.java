@@ -1,6 +1,7 @@
 package brightspark.asynclocator.gametest;
 
 import brightspark.asynclocator.AsyncLocator;
+import brightspark.asynclocator.LocateChunkLoader;
 import brightspark.asynclocator.logic.CommonLogic;
 import brightspark.asynclocator.logic.EnderEyeItemLogic;
 import brightspark.asynclocator.logic.ExplorationMapFunctionLogic;
@@ -41,6 +42,8 @@ import net.minecraft.world.level.biome.Biomes;
 import net.minecraft.world.level.biome.MultiNoiseBiomeSource;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.ChestBlockEntity;
+import net.minecraft.world.level.chunk.ChunkAccess;
+import net.minecraft.world.level.chunk.status.ChunkStatus;
 import net.minecraft.world.level.levelgen.structure.BuiltinStructures;
 import net.minecraft.world.level.levelgen.structure.placement.RandomSpreadStructurePlacement;
 import net.minecraft.world.level.levelgen.structure.placement.RandomSpreadType;
@@ -294,6 +297,44 @@ public final class AsyncLocatorGameTestLogic {
                         checkpointReached.get() && pair == null && throwable instanceof CancellationException));
         helper.succeedWhen(() -> helper.assertTrue(
                 cancelled.get(), Component.literal("Interrupted structure check did not stop before storage access")));
+    }
+
+    public static void locateWorkerLoadsStructureChunkItself(GameTestHelper helper) {
+        var level = helper.getLevel();
+        ChunkPos target = new ChunkPos(new ChunkPos(helper.absolutePos(BlockPos.ZERO)).x + 1_000, 0);
+        helper.assertTrue(
+                LocateChunkLoader.tryLoad(level, target.x, target.z, ChunkStatus.STRUCTURE_STARTS) == null,
+                Component.literal("Calls outside a locate search must keep the vanilla getChunk path"));
+
+        AtomicBoolean requested = new AtomicBoolean();
+        AtomicReference<ChunkAccess> loaded = new AtomicReference<>();
+        AtomicBoolean offServerThread = new AtomicBoolean();
+        AsyncLocator.locateBiome(
+                        level,
+                        holder -> {
+                            if (requested.compareAndSet(false, true)) {
+                                offServerThread.set(!level.getServer().isSameThread());
+                                loaded.set(LocateChunkLoader.tryLoad(
+                                        level, target.x, target.z, ChunkStatus.STRUCTURE_STARTS));
+                            }
+                            return true;
+                        },
+                        "structure chunk load (game test)",
+                        helper.absolutePos(new BlockPos(1, 1, 1)),
+                        64,
+                        32,
+                        64)
+                .handleOnServerThread((pair, throwable) -> helper.assertTrue(
+                        throwable == null, Component.literal("Locate search failed while loading a chunk")));
+
+        helper.succeedWhen(() -> {
+            ChunkAccess chunk = loaded.get();
+            helper.assertTrue(chunk != null, Component.literal("Locate worker did not receive the chunk"));
+            helper.assertTrue(offServerThread.get(), Component.literal("Chunk was requested from the server thread"));
+            helper.assertTrue(
+                    chunk.getPos().equals(target) && chunk.getPersistedStatus().isOrAfter(ChunkStatus.STRUCTURE_STARTS),
+                    Component.literal("Expected the requested chunk with structure starts"));
+        });
     }
 
     public static void explorationMapInvalidatesWhenNothingFound(GameTestHelper helper) {

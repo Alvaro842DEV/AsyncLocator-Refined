@@ -40,6 +40,9 @@ public final class AsyncLocatorNeoForgeGameTests {
                 AsyncLocatorGameTestLogic::interruptedStructureCheckStopsBeforeStorage);
         tests.put(
                 "interrupted_biome_locate_stops", AsyncLocatorGameTestLogic::interruptedBiomeLocateStopsBeforeSampling);
+        tests.put(
+                "locate_worker_loads_structure_chunk_itself",
+                AsyncLocatorGameTestLogic::locateWorkerLoadsStructureChunkItself);
         tests.put("exploration_map_invalidates", AsyncLocatorGameTestLogic::explorationMapInvalidatesWhenNothingFound);
         tests.put("merchant_map_invalidates", AsyncLocatorGameTestLogic::merchantMapInvalidatesWhenNothingFound);
         tests.put("eye_of_ender_refunds", AsyncLocatorGameTestLogic::eyeOfEnderRefundsWhenNothingFound);
