@@ -2,6 +2,7 @@ package brightspark.asynclocator.platform;
 
 import brightspark.asynclocator.ALConstants;
 import brightspark.asynclocator.logic.CommonLogic;
+import brightspark.asynclocator.logic.MapPreview;
 import brightspark.asynclocator.platform.services.ExplorationMapFunctionLogicHelper;
 import java.util.UUID;
 import java.util.function.BiConsumer;
@@ -38,18 +39,19 @@ public class FabricExplorationMapFunctionLogicHelper implements ExplorationMapFu
             int scale,
             Holder<MapDecorationType> destinationTypeHolder,
             BlockPos invPos,
-            @Nullable Component displayName) {
+            @Nullable Component displayName,
+            @Nullable MapPreview preview) {
         boolean updated = handleUpdateMapInContainer(mapStack, level, invPos, (container, slot) -> {
             ItemStack actualStack = container.getItem(slot);
 
-            CommonLogic.finalizeMap(actualStack, level, pos, scale, destinationTypeHolder, displayName);
+            CommonLogic.finalizeMap(actualStack, level, pos, scale, destinationTypeHolder, displayName, preview);
             ALConstants.logDebug("Updated map in Fabric container slot {}, broadcasting changes.", slot);
             container.setItem(slot, actualStack);
         });
         if (!updated) {
             ALConstants.logDebug(
                     "Fabric updateMap fallback: no container/slot match. Finalizing pending map in-place.");
-            CommonLogic.finalizeMap(mapStack, level, pos, scale, destinationTypeHolder, displayName);
+            CommonLogic.finalizeMap(mapStack, level, pos, scale, destinationTypeHolder, displayName, preview);
         }
     }
 

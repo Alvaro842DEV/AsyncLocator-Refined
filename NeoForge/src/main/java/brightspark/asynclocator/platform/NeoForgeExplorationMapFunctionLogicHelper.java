@@ -2,6 +2,7 @@ package brightspark.asynclocator.platform;
 
 import brightspark.asynclocator.ALConstants;
 import brightspark.asynclocator.logic.CommonLogic;
+import brightspark.asynclocator.logic.MapPreview;
 import brightspark.asynclocator.platform.services.ExplorationMapFunctionLogicHelper;
 import java.util.UUID;
 import java.util.function.BiConsumer;
@@ -50,11 +51,12 @@ public class NeoForgeExplorationMapFunctionLogicHelper implements ExplorationMap
             int scale,
             Holder<MapDecorationType> destinationTypeHolder,
             BlockPos invPos,
-            @Nullable Component displayName) {
+            @Nullable Component displayName,
+            @Nullable MapPreview preview) {
         boolean updated = handleUpdateMapInChest(mapStack, level, invPos, (handler, slot) -> {
             ItemStack actualStack = handler.getStackInSlot(slot);
 
-            CommonLogic.finalizeMap(actualStack, level, pos, scale, destinationTypeHolder, displayName);
+            CommonLogic.finalizeMap(actualStack, level, pos, scale, destinationTypeHolder, displayName, preview);
             // finalize the actual stack
             ALConstants.logDebug("Updated map in NeoForge inventory slot {}, broadcasting changes.", slot);
 
@@ -68,7 +70,7 @@ public class NeoForgeExplorationMapFunctionLogicHelper implements ExplorationMap
         if (!updated) {
             ALConstants.logDebug(
                     "NeoForge updateMap fallback: no container/slot match. Finalizing pending map in-place.");
-            CommonLogic.finalizeMap(mapStack, level, pos, scale, destinationTypeHolder, displayName);
+            CommonLogic.finalizeMap(mapStack, level, pos, scale, destinationTypeHolder, displayName, preview);
         }
     }
 

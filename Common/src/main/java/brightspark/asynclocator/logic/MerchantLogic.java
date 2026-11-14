@@ -28,6 +28,7 @@ import org.jetbrains.annotations.Nullable;
 
 public class MerchantLogic {
     private static final long MAP_LOCATE_TIMEOUT_MINUTES = 10L;
+    private static final int MAP_SCALE = 2;
 
     private MerchantLogic() {}
 
@@ -61,7 +62,7 @@ public class MerchantLogic {
             ItemStack mapStack,
             @Nullable String displayNameKey,
             Holder<MapDecorationType> destinationTypeHolder,
-            @Nullable BlockPos pos) {
+            @Nullable LocatedMap located) {
         if (!AsyncLocator.isLevelActive(level)
                 || merchant.isRemoved()
                 || !merchant.isAlive()
@@ -70,15 +71,17 @@ public class MerchantLogic {
             return;
         }
 
-        if (pos == null) {
+        if (located == null) {
             ALConstants.logInfo("No location found - invalidating merchant offer");
             invalidateMap(merchant, mapStack);
         } else {
+            BlockPos pos = located.pos();
             ALConstants.logInfo("Location found at {} - updating treasure map in merchant offer", pos);
             Component nameComponent = (displayNameKey == null || displayNameKey.isEmpty())
                     ? null
                     : Component.translatable(displayNameKey);
-            CommonLogic.finalizeMap(mapStack, level, pos, 2, destinationTypeHolder, nameComponent);
+            CommonLogic.finalizeMap(
+                    mapStack, level, pos, MAP_SCALE, destinationTypeHolder, nameComponent, located.preview());
         }
 
         sendOffersToTradingPlayer(merchant);
@@ -114,12 +117,14 @@ public class MerchantLogic {
                 pTrader, emeraldCost, maxUses, villagerXp, (level, merchant, mapStack) -> AsyncLocator.locate(
                                 level, destination, merchant.blockPosition(), 100, true)
                         .withTimeout(MAP_LOCATE_TIMEOUT_MINUTES, TimeUnit.MINUTES)
-                        .handleOnServerThread((pos, throwable) -> {
+                        .thenApplyOffThread(pos -> LocatedMap.prepare(level, pos, MAP_SCALE))
+                        .handleOnServerThread((located, throwable) -> {
                             if (throwable != null) {
                                 ALConstants.logError(throwable, "Merchant map locate failed: invalidating offer");
-                                pos = null;
+                                located = null;
                             }
-                            handleLocationFound(level, merchant, mapStack, displayNameKey, destinationTypeHolder, pos);
+                            handleLocationFound(
+                                    level, merchant, mapStack, displayNameKey, destinationTypeHolder, located);
                         }));
     }
 
@@ -135,12 +140,15 @@ public class MerchantLogic {
                 pTrader, emeraldCost, maxUses, villagerXp, (level, merchant, mapStack) -> AsyncLocator.locate(
                                 level, structureSet, merchant.blockPosition(), 100, true)
                         .withTimeout(MAP_LOCATE_TIMEOUT_MINUTES, TimeUnit.MINUTES)
-                        .handleOnServerThread((pair, throwable) -> {
+                        .thenApplyOffThread(
+                                pair -> LocatedMap.prepare(level, pair == null ? null : pair.getFirst(), MAP_SCALE))
+                        .handleOnServerThread((located, throwable) -> {
                             if (throwable != null) {
                                 ALConstants.logError(throwable, "Merchant map locate failed: invalidating offer");
+                                located = null;
                             }
-                            BlockPos pos = throwable == null && pair != null ? pair.getFirst() : null;
-                            handleLocationFound(level, merchant, mapStack, displayNameKey, destinationTypeHolder, pos);
+                            handleLocationFound(
+                                    level, merchant, mapStack, displayNameKey, destinationTypeHolder, located);
                         }));
     }
 

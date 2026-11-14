@@ -4,6 +4,8 @@ import brightspark.asynclocator.ALConstants;
 import brightspark.asynclocator.AsyncLocator;
 import brightspark.asynclocator.logic.CommonLogic;
 import brightspark.asynclocator.logic.ExplorationMapFunctionLogic;
+import brightspark.asynclocator.logic.LocatedMap;
+import brightspark.asynclocator.logic.MapPreview;
 import brightspark.asynclocator.logic.MerchantLogic;
 import brightspark.asynclocator.platform.Services;
 import java.util.UUID;
@@ -75,17 +77,19 @@ public abstract class ExplorationMapFunctionMixin {
         ItemStack pendingMapStack = CommonLogic.createManagedMap();
         CommonLogic.LootrTarget lootrTarget = CommonLogic.getActiveLootrTarget();
 
+        int scale = this.zoom;
         AsyncLocator.locate(serverLevel, destination, originPos, searchRadius, skipKnownStructures)
                 .withTimeout(MAP_LOCATE_TIMEOUT_MINUTES, TimeUnit.MINUTES)
-                .handleOnServerThread((foundPos, throwable) -> {
+                .thenApplyOffThread(foundPos -> LocatedMap.prepare(serverLevel, foundPos, scale))
+                .handleOnServerThread((located, throwable) -> {
                     if (throwable != null) {
                         ALConstants.logError(
                                 throwable,
                                 "Exploration map locate for {} failed - invalidating map",
                                 destination.location());
-                        foundPos = null;
+                        located = null;
                     }
-                    asyncLocator$handleLocateResult(serverLevel, context, pendingMapStack, lootrTarget, foundPos);
+                    asyncLocator$handleLocateResult(serverLevel, context, pendingMapStack, lootrTarget, located);
                 });
 
         cir.setReturnValue(pendingMapStack);
@@ -97,7 +101,9 @@ public abstract class ExplorationMapFunctionMixin {
             LootContext context,
             ItemStack pendingMapStack,
             @Nullable CommonLogic.LootrTarget lootrTarget,
-            @Nullable BlockPos foundPos) {
+            @Nullable LocatedMap located) {
+        BlockPos foundPos = located == null ? null : located.pos();
+        MapPreview preview = located == null ? null : located.preview();
         if (!AsyncLocator.isLevelActive(serverLevel)) {
             ALConstants.logDebug("Exploration map locate result arrived after its server level stopped");
             return;
@@ -126,7 +132,7 @@ public abstract class ExplorationMapFunctionMixin {
                         if (foundPos != null) {
                             ALConstants.logDebug("Finalizing map in merchant offer (UUID: {})", offerId);
                             CommonLogic.finalizeMap(
-                                    result, serverLevel, foundPos, this.zoom, this.mapDecoration, mapName);
+                                    result, serverLevel, foundPos, this.zoom, this.mapDecoration, mapName, preview);
                         } else {
                             ALConstants.logDebug("Clearing pending map in merchant offer (UUID: {})", offerId);
                             CommonLogic.clearPendingState(result);
@@ -146,7 +152,14 @@ public abstract class ExplorationMapFunctionMixin {
                         "Async location found for exploration map {}: {}", destination.location(), foundPos);
 
                 boolean updated = CommonLogic.tryUpdateMapInLootrTarget(
-                        serverLevel, lootrTarget, pendingMapStack, foundPos, this.zoom, this.mapDecoration, mapName);
+                        serverLevel,
+                        lootrTarget,
+                        pendingMapStack,
+                        foundPos,
+                        this.zoom,
+                        this.mapDecoration,
+                        mapName,
+                        preview);
 
                 if (!updated && inventoryPos != null) {
                     Services.EXPLORATION_MAP_FUNCTION_LOGIC.updateMap(
@@ -156,10 +169,11 @@ public abstract class ExplorationMapFunctionMixin {
                             this.zoom,
                             this.mapDecoration,
                             inventoryPos,
-                            mapName);
+                            mapName,
+                            preview);
                 } else if (!updated) {
                     CommonLogic.finalizeMap(
-                            pendingMapStack, serverLevel, foundPos, this.zoom, this.mapDecoration, mapName);
+                            pendingMapStack, serverLevel, foundPos, this.zoom, this.mapDecoration, mapName, preview);
                 }
             } else {
                 ALConstants.logInfo(

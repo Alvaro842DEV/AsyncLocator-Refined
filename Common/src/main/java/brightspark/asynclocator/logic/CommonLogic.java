@@ -126,7 +126,7 @@ public class CommonLogic {
         clearPendingMarkers(mapStack);
     }
 
-    // Updates the data of the map
+    // Same as below, without an off-thread preview
     public static void finalizeMap(
             ItemStack mapStack,
             ServerLevel level,
@@ -134,10 +134,24 @@ public class CommonLogic {
             int scale,
             Holder<MapDecorationType> destinationType,
             @Nullable Component displayName) {
+        finalizeMap(mapStack, level, pos, scale, destinationType, displayName, null);
+    }
+
+    /**
+     * Updates the data of the map
+     * A preview computed off-thread replaces vanilla's biome preview rendering.
+     */
+    public static void finalizeMap(
+            ItemStack mapStack,
+            ServerLevel level,
+            BlockPos pos,
+            int scale,
+            Holder<MapDecorationType> destinationType,
+            @Nullable Component displayName,
+            @Nullable MapPreview preview) {
         MapId existingId = mapStack.get(DataComponents.MAP_ID);
         MapId mapId = existingId != null ? existingId : level.getFreeMapId();
 
-        // Create or replace map data with proper settings
         MapItemSavedData mapData =
                 MapItemSavedData.createFresh(pos.getX(), pos.getZ(), (byte) scale, true, true, level.dimension());
         level.setMapData(mapId, mapData);
@@ -145,7 +159,9 @@ public class CommonLogic {
             mapStack.set(DataComponents.MAP_ID, mapId);
         }
 
-        MapItem.renderBiomePreviewMap(level, mapStack);
+        if (preview == null || !preview.applyTo(mapData)) {
+            MapItem.renderBiomePreviewMap(level, mapStack);
+        }
         MapItemSavedData.addTargetDecoration(mapStack, pos, "+", destinationType);
 
         if (displayName != null) {
@@ -175,12 +191,14 @@ public class CommonLogic {
             BlockPos pos,
             int scale,
             Holder<MapDecorationType> destinationType,
-            @Nullable Component displayName) {
+            @Nullable Component displayName,
+            @Nullable MapPreview preview) {
         if (target == null) return false;
 
-        return tryUpdateMapInLootrMenu(level, target, pendingMapStack, pos, scale, destinationType, displayName)
+        return tryUpdateMapInLootrMenu(
+                        level, target, pendingMapStack, pos, scale, destinationType, displayName, preview)
                 || tryUpdateMapInLootrInventory(
-                        target.inventory(), pendingMapStack, level, pos, scale, destinationType, displayName);
+                        target.inventory(), pendingMapStack, level, pos, scale, destinationType, displayName, preview);
     }
 
     public static boolean tryInvalidateMapInLootrTarget(
@@ -198,7 +216,8 @@ public class CommonLogic {
             BlockPos pos,
             int scale,
             Holder<MapDecorationType> destinationType,
-            @Nullable Component displayName) {
+            @Nullable Component displayName,
+            @Nullable MapPreview preview) {
         ServerPlayer player = level.getServer().getPlayerList().getPlayer(target.ownerId());
         if (player == null) return false;
 
@@ -213,7 +232,7 @@ public class CommonLogic {
             ItemStack slotStack = slot.getItem();
             UUID slotId = getTrackingUUID(slotStack);
             if (targetId.equals(slotId)) {
-                finalizeMap(slotStack, level, pos, scale, destinationType, displayName);
+                finalizeMap(slotStack, level, pos, scale, destinationType, displayName, preview);
                 slot.set(slotStack);
                 slot.setChanged();
                 menu.broadcastChanges();
@@ -263,7 +282,8 @@ public class CommonLogic {
             BlockPos pos,
             int scale,
             Holder<MapDecorationType> destinationType,
-            @Nullable Component displayName) {
+            @Nullable Component displayName,
+            @Nullable MapPreview preview) {
         if (container == null || !isLootrInventory(container)) return false;
 
         UUID targetId = getTrackingUUID(pendingMapStack);
@@ -273,7 +293,7 @@ public class CommonLogic {
             ItemStack slotStack = container.getItem(i);
             UUID slotId = getTrackingUUID(slotStack);
             if (targetId.equals(slotId)) {
-                finalizeMap(slotStack, level, pos, scale, destinationType, displayName);
+                finalizeMap(slotStack, level, pos, scale, destinationType, displayName, preview);
                 container.setItem(i, slotStack);
                 container.setChanged();
                 ALConstants.logDebug("Updated pending map via Lootr inventory slot {}", i);

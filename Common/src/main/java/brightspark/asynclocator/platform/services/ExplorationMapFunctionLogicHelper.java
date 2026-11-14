@@ -1,5 +1,6 @@
 package brightspark.asynclocator.platform.services;
 
+import brightspark.asynclocator.logic.MapPreview;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
 import net.minecraft.network.chat.Component;
@@ -15,6 +16,7 @@ public interface ExplorationMapFunctionLogicHelper {
      * Updates a pending exploration map located in an inventory at the given position with the found feature details
      * Implementations should find the mapStack instance in the inventory at invPos,
      * apply the feature details to it and ensure the updated stack is saved back into the inventory slot
+     * The preview, when present, was computed off-thread and is passed on to CommonLogic#finalizeMap
      */
     void updateMap(
             ItemStack mapStack,
@@ -23,5 +25,6 @@ public interface ExplorationMapFunctionLogicHelper {
             int scale,
             Holder<MapDecorationType> destinationTypeHolder,
             BlockPos invPos,
-            @Nullable Component displayName);
+            @Nullable Component displayName,
+            @Nullable MapPreview preview);
 }

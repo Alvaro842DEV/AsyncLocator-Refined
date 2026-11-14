@@ -8,6 +8,7 @@ import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 import net.minecraft.commands.arguments.ResourceOrTagArgument;
@@ -38,6 +39,7 @@ public class AsyncLocator {
      * that a task submission can never race a concurrent shutdown
      */
     private static ExecutorService LOCATING_EXECUTOR_SERVICE = null;
+    private static ExecutorService RESULT_EXECUTOR_SERVICE = null;
     private static LocateTaskLimiter LOCATE_TASK_LIMITER = null;
     private static boolean EXECUTOR_STOPPED = false;
     private static final AtomicInteger THREAD_COUNTER = new AtomicInteger(1);
@@ -72,6 +74,12 @@ public class AsyncLocator {
                     .uncaughtExceptionHandler(
                             (t, e) -> ALConstants.logError(e, "Uncaught exception in virtual thread {}", t.getName()))
                     .factory());
+            RESULT_EXECUTOR_SERVICE = Executors.newSingleThreadExecutor(Thread.ofPlatform()
+                    .name(ALConstants.MOD_ID + "-results")
+                    .daemon(true)
+                    .uncaughtExceptionHandler(
+                            (t, e) -> ALConstants.logError(e, "Uncaught exception in thread {}", t.getName()))
+                    .factory());
         }
     }
 
@@ -79,6 +87,10 @@ public class AsyncLocator {
         ExecutorService executor;
         List<SharedLocate<?>> pendingLocates;
         synchronized (AsyncLocator.class) {
+            if (RESULT_EXECUTOR_SERVICE != null) {
+                RESULT_EXECUTOR_SERVICE.shutdownNow();
+                RESULT_EXECUTOR_SERVICE = null;
+            }
             executor = LOCATING_EXECUTOR_SERVICE;
             LOCATING_EXECUTOR_SERVICE = null;
             LOCATE_TASK_LIMITER = null;
@@ -192,6 +204,19 @@ public class AsyncLocator {
                 completableFuture.completeExceptionally(e);
                 return CompletableFuture.completedFuture(null);
             }
+        }
+    }
+
+    private static void executeResultTask(Runnable task) {
+        synchronized (AsyncLocator.class) {
+            if (RESULT_EXECUTOR_SERVICE == null) {
+                if (EXECUTOR_STOPPED) {
+                    throw new RejectedExecutionException("Async locator executor service has been shut down");
+                }
+                ALConstants.logWarn("Locating executor service not initialized yet: creating lazily");
+                setupExecutorService();
+            }
+            RESULT_EXECUTOR_SERVICE.execute(task);
         }
     }
 
@@ -485,6 +510,19 @@ public class AsyncLocator {
         public LocateTask<T> thenOnServerThread(Consumer<T> action) {
             completableFuture.thenAccept(result -> deferToServerThread(() -> action.accept(result)));
             return this;
+        }
+
+        /**
+         * Returns a task whose result is function applied to this task's result on Async Locator's result
+         * thread, never on the server thread, even if this task has already finished. Use it for expensive work on
+         * the result that only reads thread-safe data.
+         */
+        public <R> LocateTask<R> thenApplyOffThread(Function<T, R> function) {
+            return new LocateTask<>(
+                    server,
+                    completableFuture.thenApplyAsync(function, AsyncLocator::executeResultTask),
+                    taskFuture,
+                    startedFuture);
         }
 
         /**
