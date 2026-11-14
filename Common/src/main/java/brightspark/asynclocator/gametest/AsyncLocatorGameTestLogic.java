@@ -6,22 +6,29 @@ import brightspark.asynclocator.logic.CommonLogic;
 import brightspark.asynclocator.logic.EnderEyeItemLogic;
 import brightspark.asynclocator.logic.ExplorationMapFunctionLogic;
 import brightspark.asynclocator.logic.EyeOfEnderData;
+import brightspark.asynclocator.logic.MapPreview;
 import brightspark.asynclocator.logic.MerchantLogic;
 import brightspark.asynclocator.platform.Services;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Arrays;
 import java.util.Optional;
 import java.util.concurrent.CancellationException;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Predicate;
 import net.minecraft.ChatFormatting;
 import net.minecraft.commands.CommandSource;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Holder;
+import net.minecraft.core.SectionPos;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.TextColor;
+import net.minecraft.tags.BiomeTags;
 import net.minecraft.tags.StructureTags;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.SimpleContainer;
@@ -34,10 +41,12 @@ import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.EnderEyeItem;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.item.MapItem;
 import net.minecraft.world.item.trading.MerchantOffer;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.biome.Biomes;
 import net.minecraft.world.level.biome.MultiNoiseBiomeSource;
 import net.minecraft.world.level.block.Blocks;
@@ -47,7 +56,9 @@ import net.minecraft.world.level.chunk.status.ChunkStatus;
 import net.minecraft.world.level.levelgen.structure.BuiltinStructures;
 import net.minecraft.world.level.levelgen.structure.placement.RandomSpreadStructurePlacement;
 import net.minecraft.world.level.levelgen.structure.placement.RandomSpreadType;
+import net.minecraft.world.level.material.MapColor;
 import net.minecraft.world.level.saveddata.maps.MapDecorationTypes;
+import net.minecraft.world.level.saveddata.maps.MapItemSavedData;
 import net.minecraft.world.level.storage.loot.BuiltInLootTables;
 import net.minecraft.world.level.storage.loot.LootContext;
 import net.minecraft.world.level.storage.loot.LootParams;
@@ -67,6 +78,7 @@ public final class AsyncLocatorGameTestLogic {
     public static final String EMPTY_STRUCTURE = "asynclocator:empty";
 
     public static final int MAX_TICKS = 600;
+    public static final int CHUNK_LOADING_MAX_TICKS = 3000;
 
     private AsyncLocatorGameTestLogic() {}
 
@@ -334,6 +346,159 @@ public final class AsyncLocatorGameTestLogic {
             helper.assertTrue(
                     chunk.getPos().equals(target) && chunk.getPersistedStatus().isOrAfter(ChunkStatus.STRUCTURE_STARTS),
                     Component.literal("Expected the requested chunk with structure starts"));
+        });
+    }
+
+    public static void mapPreviewColorsMatchVanilla(GameTestHelper helper) {
+        var level = helper.getLevel();
+        // Far from the test area, so the changed biomes cannot affect other tests
+        BlockPos target = helper.absolutePos(new BlockPos(1, 1, 1)).offset(4096, 0, 0);
+        int scale = 0;
+        int[] center = MapPreview.mapCenter(target, scale);
+        var biomes = level.registryAccess().lookupOrThrow(Registries.BIOME);
+        Holder<Biome> river = biomes.getOrThrow(Biomes.RIVER);
+        Holder<Biome> plains = biomes.getOrThrow(Biomes.PLAINS);
+
+        int minChunkX = SectionPos.blockToSectionCoord(center[0] - 64);
+        int minChunkZ = SectionPos.blockToSectionCoord(center[1] - 64);
+        for (int chunkX = minChunkX; chunkX < minChunkX + 8; chunkX++) {
+            for (int chunkZ = minChunkZ; chunkZ < minChunkZ + 8; chunkZ++) {
+                level.getChunk(chunkX, chunkZ, ChunkStatus.BIOMES)
+                        .fillBiomesFromNoise(
+                                (x, y, z, sampler) -> Math.floorMod(x * 3 + z, 11) < 4 ? river : plains,
+                                level.getChunkSource().randomState().sampler());
+            }
+        }
+
+        ItemStack vanillaMap = MapItem.create(level, target.getX(), target.getZ(), (byte) scale, true, true);
+        MapItem.renderBiomePreviewMap(level, vanillaMap);
+        MapItemSavedData vanillaData = MapItem.getSavedData(vanillaMap, level);
+        byte[] colors = MapPreview.colorize(MapPreview.sample(
+                level.getBiomeManager(),
+                center[0],
+                center[1],
+                scale,
+                biome -> biome.is(BiomeTags.WATER_ON_MAP_OUTLINES)));
+
+        helper.assertTrue(
+                vanillaData != null && vanillaData.centerX == center[0] && vanillaData.centerZ == center[1],
+                Component.literal("Expected the preview to use the vanilla map center"));
+        int colored = 0;
+        for (byte color : vanillaData.colors) {
+            if (color != 0) colored++;
+        }
+        helper.assertTrue(colored > 1000, Component.literal("Expected the river pattern to color the vanilla map"));
+        helper.assertTrue(
+                Arrays.equals(vanillaData.colors, colors),
+                Component.literal("Preview colors differ from vanilla renderBiomePreviewMap"));
+        helper.succeed();
+    }
+
+    public static void mapPreviewSamplesVanillaBiomesOffThread(GameTestHelper helper) {
+        var level = helper.getLevel().getServer().getLevel(Level.NETHER);
+        helper.assertTrue(level != null, Component.literal("Expected a Nether with noise biomes"));
+        // Unloaded area: vanilla falls back to the biome source there too
+        int scale = 4;
+        int[] center = MapPreview.mapCenter(new BlockPos(40_000, 0, -40_000), scale);
+        Predicate<Holder<Biome>> wastes = biome -> biome.is(Biomes.NETHER_WASTES);
+        boolean[] vanilla = MapPreview.sample(level.getBiomeManager(), center[0], center[1], scale, wastes);
+
+        AtomicBoolean requested = new AtomicBoolean();
+        AtomicReference<boolean[]> offThread = new AtomicReference<>();
+        AtomicBoolean ranOffServerThread = new AtomicBoolean();
+        AsyncLocator.locateBiome(
+                        level,
+                        holder -> {
+                            if (requested.compareAndSet(false, true)) {
+                                ranOffServerThread.set(!level.getServer().isSameThread());
+                                offThread.set(MapPreview.sample(
+                                        MapPreview.offThreadBiomes(level), center[0], center[1], scale, wastes));
+                            }
+                            return true;
+                        },
+                        "map preview sampling (game test)",
+                        new BlockPos(0, 64, 0),
+                        64,
+                        32,
+                        64)
+                .handleOnServerThread((pair, throwable) ->
+                        helper.assertTrue(throwable == null, Component.literal("Off-thread preview sampling failed")));
+
+        helper.succeedWhen(() -> {
+            boolean[] sampled = offThread.get();
+            helper.assertTrue(sampled != null, Component.literal("Off-thread sampling did not run"));
+            helper.assertTrue(ranOffServerThread.get(), Component.literal("Sampling ran on the server thread"));
+            boolean anyMatch = false;
+            boolean anyMiss = false;
+            for (boolean match : vanilla) {
+                anyMatch |= match;
+                anyMiss |= !match;
+            }
+            helper.assertTrue(anyMatch && anyMiss, Component.literal("Expected mixed Nether biomes in the map area"));
+            helper.assertTrue(
+                    Arrays.equals(vanilla, sampled),
+                    Component.literal("Off-thread biomes differ from vanilla level.getBiome"));
+        });
+    }
+
+    public static void finishedMapUsesPreparedPreview(GameTestHelper helper) {
+        var level = helper.getLevel();
+        BlockPos target = helper.absolutePos(new BlockPos(1, 1, 1));
+        int scale = 2;
+        int[] center = MapPreview.mapCenter(target, scale);
+        int pixel = 64 * 128 + 64;
+        byte color = MapColor.COLOR_ORANGE.getPackedId(MapColor.Brightness.HIGH);
+        byte[] colors = new byte[128 * 128];
+        colors[pixel] = color;
+
+        ItemStack prepared = CommonLogic.createManagedMap();
+        CommonLogic.finalizeMap(
+                prepared,
+                level,
+                target,
+                scale,
+                MapDecorationTypes.RED_X,
+                null,
+                new MapPreview(level.dimension(), center[0], center[1], scale, colors));
+        MapItemSavedData preparedData = MapItem.getSavedData(prepared, level);
+        helper.assertTrue(
+                preparedData != null && preparedData.colors[pixel] == color,
+                Component.literal("Expected the prepared preview colors on the finished map"));
+
+        ItemStack mismatched = CommonLogic.createManagedMap();
+        CommonLogic.finalizeMap(
+                mismatched,
+                level,
+                target,
+                scale,
+                MapDecorationTypes.RED_X,
+                null,
+                new MapPreview(level.dimension(), center[0] + 1, center[1], scale, colors));
+        MapItemSavedData mismatchedData = MapItem.getSavedData(mismatched, level);
+        helper.assertTrue(
+                mismatchedData != null && mismatchedData.colors[pixel] == 0,
+                Component.literal("Expected a mismatched preview to fall back to vanilla rendering"));
+        helper.succeed();
+    }
+
+    public static void locateResultIsPreparedOffServerThread(GameTestHelper helper) {
+        var server = helper.getLevel().getServer();
+        AtomicBoolean ranOffServerThread = new AtomicBoolean();
+        AtomicBoolean delivered = new AtomicBoolean();
+
+        new AsyncLocator.LocateTask<>(
+                        server, CompletableFuture.completedFuture(1), CompletableFuture.completedFuture(null))
+                .thenApplyOffThread(value -> {
+                    ranOffServerThread.set(!server.isSameThread());
+                    return value + 1;
+                })
+                .handleOnServerThread(
+                        (value, throwable) -> delivered.set(throwable == null && value == 2 && server.isSameThread()));
+
+        helper.succeedWhen(() -> {
+            helper.assertTrue(
+                    delivered.get(), Component.literal("Prepared result was not delivered to the server thread"));
+            helper.assertTrue(ranOffServerThread.get(), Component.literal("Result was prepared on the server thread"));
         });
     }
 

@@ -1,5 +1,6 @@
 package brightspark.asynclocator.gametest;
 
+import static brightspark.asynclocator.gametest.AsyncLocatorGameTestLogic.CHUNK_LOADING_MAX_TICKS;
 import static brightspark.asynclocator.gametest.AsyncLocatorGameTestLogic.EMPTY_STRUCTURE;
 import static brightspark.asynclocator.gametest.AsyncLocatorGameTestLogic.MAX_TICKS;
 
@@ -45,6 +46,26 @@ public final class AsyncLocatorFabricGameTests {
     }
 
     @GameTest(structure = EMPTY_STRUCTURE, maxTicks = MAX_TICKS)
+    public void mapPreviewColorsMatchVanilla(GameTestHelper helper) {
+        AsyncLocatorGameTestLogic.mapPreviewColorsMatchVanilla(helper);
+    }
+
+    @GameTest(structure = EMPTY_STRUCTURE, maxTicks = MAX_TICKS)
+    public void mapPreviewSamplesVanillaBiomesOffThread(GameTestHelper helper) {
+        AsyncLocatorGameTestLogic.mapPreviewSamplesVanillaBiomesOffThread(helper);
+    }
+
+    @GameTest(structure = EMPTY_STRUCTURE, maxTicks = MAX_TICKS)
+    public void finishedMapUsesPreparedPreview(GameTestHelper helper) {
+        AsyncLocatorGameTestLogic.finishedMapUsesPreparedPreview(helper);
+    }
+
+    @GameTest(structure = EMPTY_STRUCTURE, maxTicks = MAX_TICKS)
+    public void locateResultIsPreparedOffServerThread(GameTestHelper helper) {
+        AsyncLocatorGameTestLogic.locateResultIsPreparedOffServerThread(helper);
+    }
+
+    @GameTest(structure = EMPTY_STRUCTURE, maxTicks = MAX_TICKS)
     public void explorationMapInvalidatesWhenNothingFound(GameTestHelper helper) {
         AsyncLocatorGameTestLogic.explorationMapInvalidatesWhenNothingFound(helper);
     }
@@ -74,7 +95,7 @@ public final class AsyncLocatorFabricGameTests {
         AsyncLocatorGameTestLogic.pendingMapCannotBePickedUp(helper);
     }
 
-    @GameTest(structure = EMPTY_STRUCTURE, maxTicks = MAX_TICKS)
+    @GameTest(structure = EMPTY_STRUCTURE, maxTicks = CHUNK_LOADING_MAX_TICKS)
     public void locateCommandsCompleteAsynchronously(GameTestHelper helper) {
         AsyncLocatorGameTestLogic.locateCommandsCompleteAsynchronously(helper);
     }

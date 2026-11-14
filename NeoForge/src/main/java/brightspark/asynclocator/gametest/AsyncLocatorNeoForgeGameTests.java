@@ -3,6 +3,7 @@ package brightspark.asynclocator.gametest;
 import brightspark.asynclocator.ALConstants;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Consumer;
 import net.minecraft.core.Holder;
 import net.minecraft.core.registries.Registries;
@@ -19,6 +20,7 @@ import net.neoforged.neoforge.registries.RegisterEvent;
 
 public final class AsyncLocatorNeoForgeGameTests {
     private static final Map<String, Consumer<GameTestHelper>> TESTS = buildTests();
+    private static final Set<String> CHUNK_LOADING_TESTS = Set.of("locate_commands_complete_async");
     private static final ResourceLocation EMPTY_STRUCTURE =
             ResourceLocation.parse(AsyncLocatorGameTestLogic.EMPTY_STRUCTURE);
 
@@ -43,6 +45,14 @@ public final class AsyncLocatorNeoForgeGameTests {
         tests.put(
                 "locate_worker_loads_structure_chunk_itself",
                 AsyncLocatorGameTestLogic::locateWorkerLoadsStructureChunkItself);
+        tests.put("map_preview_colors_match_vanilla", AsyncLocatorGameTestLogic::mapPreviewColorsMatchVanilla);
+        tests.put(
+                "map_preview_samples_vanilla_biomes_off_thread",
+                AsyncLocatorGameTestLogic::mapPreviewSamplesVanillaBiomesOffThread);
+        tests.put("finished_map_uses_prepared_preview", AsyncLocatorGameTestLogic::finishedMapUsesPreparedPreview);
+        tests.put(
+                "locate_result_is_prepared_off_server_thread",
+                AsyncLocatorGameTestLogic::locateResultIsPreparedOffServerThread);
         tests.put("exploration_map_invalidates", AsyncLocatorGameTestLogic::explorationMapInvalidatesWhenNothingFound);
         tests.put("merchant_map_invalidates", AsyncLocatorGameTestLogic::merchantMapInvalidatesWhenNothingFound);
         tests.put("eye_of_ender_refunds", AsyncLocatorGameTestLogic::eyeOfEnderRefundsWhenNothingFound);
@@ -73,8 +83,13 @@ public final class AsyncLocatorNeoForgeGameTests {
                         id(name),
                         new FunctionGameTestInstance(
                                 ResourceKey.create(Registries.TEST_FUNCTION, id(name)),
-                                new TestData<>(
-                                        environment, EMPTY_STRUCTURE, AsyncLocatorGameTestLogic.MAX_TICKS, 0, true))));
+                                new TestData<>(environment, EMPTY_STRUCTURE, maxTicks(name), 0, true))));
+    }
+
+    private static int maxTicks(String name) {
+        return CHUNK_LOADING_TESTS.contains(name)
+                ? AsyncLocatorGameTestLogic.CHUNK_LOADING_MAX_TICKS
+                : AsyncLocatorGameTestLogic.MAX_TICKS;
     }
 
     private static ResourceLocation id(String name) {
